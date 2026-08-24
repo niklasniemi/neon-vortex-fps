@@ -62,11 +62,35 @@ Novice → Nightmare (reaction time, aim error, burst discipline, tracking speed
 - Utility-FSM bots with A* waypoint navigation (auto-generated on the GLB map)
 - Socket.io-compatible network layer with automatic offline fallback
 
-## Hosting (free)
-The repo is Pages-ready. For online play with a friend see the *Multiplayer hosting*
-section of the README on the repo once pushed — recommended stack:
-**GitHub Pages / Cloudflare Pages (client) + Fly.io or Oracle Always-Free VPS (WebSocket)
-— or PeerJS WebRTC P2P for 1v1 with zero servers.**
+## Playing with a friend (free, no server needed)
+
+Built-in **P2P multiplayer** via WebRTC (PeerJS): the game is hosted right here on
+GitHub Pages, and match traffic flows directly between the two browsers.
+
+1. Both players open: **https://niklasniemi.github.io/neon-vortex-fps/neon-vortex.html**
+2. Host: click **HOST GAME** → a 4-digit code appears → pick mode/map/side → **DEPLOY**
+3. Friend: type the code → **JOIN** → they auto-deploy onto the host's match
+   (opposite side; bots fill remaining slots — 1v1 up to 5v5)
+
+The host's browser runs the authoritative simulation; the guest's inputs are relayed
+and the world streams back — direct P2P, so lag equals the distance between you.
+Bomb Defusal works fully in P2P (plant/defuse/rounds).
+
+### If the public PeerJS broker is congested
+Run your own free signaling relay (only used for handshakes — game traffic stays P2P):
+
+```bash
+npx peerjs --port 9000 --path /myapp          # on any always-on machine (or free tier VM)
+# then both players open:
+# .../neon-vortex.html?peer=YOUR_SERVER_IP:9000:/myapp
+```
+
+### Other free options
+- **Client hosting alternatives:** Cloudflare Pages / Netlify / itch.io (upload as HTML)
+- **Dedicated WebSocket server later:** Fly.io / Render free tier / Oracle Always-Free VPS —
+  the engine's Socket.io-compatible layer is ready for an authoritative server upgrade
+
+## Tech
 
 ---
 *Built as a single-file engine: data-driven registries for weapons / arenas / modes /
