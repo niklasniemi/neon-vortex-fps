@@ -239,7 +239,7 @@ input[type=color]{pointer-events:auto;width:100%;height:30px;border:1px solid rg
 <script id="main">
 "use strict";
 (function(){
-const CFG={grav:-24,jump:8.6,walk:6.6,sprint:9.4,crouchSpd:3.4,accelG:11,accelA:18,fric:9,airWish:2.6,eyeH:1.62,crouchEye:0.95,feetOff:0.77,radius:0.42};
+const CFG={grav:-24,jump:8.0,walk:4.8,sprint:6.9,crouchSpd:2.6,accelG:9,accelA:14,fric:9,airWish:2.2,eyeH:1.62,crouchEye:0.95,feetOff:0.77,radius:0.42};
 const GRP={WORLD:1,CHAR:2,PROJ:4,SHIELD:8};
 const TEAM_HEX={1:0x35d6ff,2:0xffa23c};
 const TEAM_CSS={1:"#35d6ff",2:"#ffa23c"};
@@ -1396,7 +1396,7 @@ resolve();
 }
 function buildAutoNav(b,def){
 const aabb=def.aabb;
-const cell=1.25;
+const cell=.75;
 const cols=Math.max(2,Math.ceil((aabb.max[0]-aabb.min[0])/cell));
 const rows=Math.max(2,Math.ceil((aabb.max[2]-aabb.min[2])/cell));
 const hf=new Float32Array(cols*rows).fill(-999);
@@ -1432,6 +1432,28 @@ if(h<-500)continue;
 pts.push(new THREE.Vector3(x,h+.08,z));
 }
 def.hf=hf;def.hfMeta={cell:cell,minX:aabb.min[0],minZ:aabb.min[2],cols:cols,rows:rows};
+def.hfAt=(x,z)=>{
+const m=def.hfMeta;
+const ix=Math.floor((x-m.minX)/m.cell),iz=Math.floor((z-m.minZ)/m.cell);
+if(ix<0||iz<0||ix>=m.cols||iz>=m.rows)return-999;
+return hf[iz*m.cols+ix];
+};
+def.groundAt=(x,z)=>{
+const m=def.hfMeta;
+const fx=(x-m.minX)/m.cell-.5,fz=(z-m.minZ)/m.cell-.5;
+const ix=Math.floor(fx),iz=Math.floor(fz);
+const tx=fx-ix,tz=fz-iz;
+let sum=0,w=0;
+const get=(i2,j2)=>{
+if(i2<0||j2<0||i2>=m.cols||j2>=m.rows)return null;
+const v=hf[j2*m.cols+i2];
+return v<=-500?null:v;
+};
+const cs=[get(ix,iz),get(ix+1,iz),get(ix,iz+1),get(ix+1,iz+1)];
+const ws=[(1-tx)*(1-tz),tx*(1-tz),(1-tx)*tz,tx*tz];
+for(let k=0;k<4;k++)if(cs[k]!==null){sum+=cs[k]*ws[k];w+=ws[k]}
+return w>0?sum/w:-999;
+};
 const idxs=pts.map(p=>b.nav(p.x,p.y,p.z,{}));
 const ys=idxs.map(i=>b.navDefs[i].p.y).sort((a,c)=>a-c);
 const medY=ys[Math.floor(ys.length/2)]||0;
@@ -1681,7 +1703,7 @@ sun:{p:[26,44,18],i:1.15,c:0xffeecf},
 grade:{tint:[1.1,1.03,.9],amt:.3},bloom:{s:.5,r:.4,t:.86},
 amb:"industrial",surf:"concrete",noPickups:true,
 kinematic:true,
-sites:[{name:"A",x:17.5,z:-12,r:5},{name:"B",x:-22.5,z:-17.5,r:5.5}],
+sites:[{name:"A",x:-22.5,z:-17.5,r:5.5},{name:"B",x:21,z:6,r:5}],
 spCT:[[18.5,-5.8],[16,-7.4],[21,-7.2],[16.4,-4.4],[21,-4.2]],
 spT:[[21,19.5],[18,21.2],[23.6,21],[19.6,16.8],[23.2,17.4]],
 mid:[1,-.5],
@@ -1806,10 +1828,23 @@ return{grounded:g>-500&&Math.abs((g+CFG.feetOff)-body.position.y)<.3,ny:1,surf:W
 hfAt(x,z){
 const def=WORLD&&WORLD.def;
 if(!def||!def.hf)return-999;
-const m=def.hfMeta;
-const ix=Math.floor((x-m.minX)/m.cell),iz=Math.floor((z-m.minZ)/m.cell);
-if(ix<0||iz<0||ix>=m.cols||iz>=m.rows)return-999;
-return def.hf[iz*m.cols+ix];
+return def.hfAt(x,z);
+}
+groundAt(x,z){
+const def=WORLD&&WORLD.def;
+if(!def||!def.hf)return-999;
+return def.groundAt(x,z);
+}
+rayWall(origin,dir,len){
+this.raycaster.set(origin,dir);
+this.raycaster.far=len;
+const hits=this.raycaster.intersectObjects(this.colliders,false);
+for(const h of hits){
+const n=h.face?h.face.normal.clone().transformDirection(h.object.matrixWorld):null;
+if(n&&n.y>.55)continue;
+return n||new THREE.Vector3(0,1,0);
+}
+return null;
 }
 segChar(from,to,r,exclude){
 let best=null,bd=1e9;
@@ -1893,8 +1928,8 @@ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshBasicMaterial(
 m.visible=false;m.userData={comb:this,part};
 m.position.y=y;this.hitRoot.add(m);return m;
 };
-this.hitTorso=mk(.72,.95,.5,1.02,"torso");
-this.hitHead=mk(.36,.36,.36,1.66,"head");
+this.hitTorso=mk(.58,.82,.42,.96,"torso");
+this.hitHead=mk(.3,.3,.3,1.5,"head");
 GFX.scene.add(this.hitRoot);
 }
 syncHitRoot(){
@@ -2057,23 +2092,41 @@ const b=this.body,p=b.position,v=b.velocity;
 const def=WORLD.def;
 v.y+=def.grav*dt;
 if(v.y<-30)v.y=-30;
-const stepMax=.55,feet=p.y-CFG.feetOff;
+const feet=p.y-CFG.feetOff;
+const sp=Math.hypot(v.x,v.z);
+if(sp>.02){
+_vd.set(v.x/sp,0,v.z/sp);
+_vf.set(p.x,p.y-CFG.feetOff+.4,p.z);
+let n=PHYS.rayWall(_vf,_vd,CFG.radius+.15);
+if(!n){
+_vf.y=p.y-CFG.feetOff+1.15;
+n=PHYS.rayWall(_vf,_vd,CFG.radius+.15);
+}
+if(n){
+const d=v.x*n.x+v.z*n.z;
+if(d<0){v.x-=n.x*d;v.z-=n.z*d}
+}
+}
 let nx=p.x+v.x*dt;
-let h=PHYS.hfAt(nx,p.z);
-if(h<=-500||h>feet+stepMax){nx=p.x;v.x=0}
+{
+const gB=PHYS.groundAt(nx,p.z),hN=PHYS.hfAt(nx,p.z);
+if((gB>-900&&gB>feet+.55)||(hN>-900&&hN>feet+.9)){nx=p.x;v.x=0}
+}
 let nz=p.z+v.z*dt;
-h=PHYS.hfAt(nx,nz);
-if(h<=-500||h>feet+stepMax){nz=p.z;v.z=0}
-p.x=U.clamp(nx,WORLD.bounds.minX+.5,WORLD.bounds.maxX-.5);
-p.z=U.clamp(nz,WORLD.bounds.minZ+.5,WORLD.bounds.maxZ-.5);
+{
+const gB=PHYS.groundAt(nx,nz),hN=PHYS.hfAt(nx,nz);
+if((gB>-900&&gB>feet+.55)||(hN>-900&&hN>feet+.9)){nz=p.z;v.z=0}
+}
+p.x=U.clamp(nx,WORLD.bounds.minX+.4,WORLD.bounds.maxX-.4);
+p.z=U.clamp(nz,WORLD.bounds.minZ+.4,WORLD.bounds.maxZ-.4);
 let ny=p.y+v.y*dt;
-const g=PHYS.hfAt(p.x,p.z);
+const g=PHYS.groundAt(p.x,p.z);
 let grounded=false;
-if(g>-500){
+if(g>-900){
 const ty=g+CFG.feetOff;
 if(ny<=ty){
 if(v.y<=.01){ny=ty;v.y=0;grounded=true}
-}else if(v.y<=.01&&p.y>=ty-.05&&p.y-ty<.5){ny=ty;v.y=0;grounded=true}
+}else if(v.y<=.01&&p.y<=ty+.45){ny=ty;v.y=0;grounded=true}
 }
 p.y=ny;
 this.groundedInfo={grounded:grounded,ny:1,surf:def.surf};
@@ -2619,6 +2672,7 @@ root.add(nameSpr);
 const aura=new THREE.Mesh(new THREE.IcosahedronGeometry(.85,1),new THREE.MeshBasicMaterial({color:0xff7ae0,wireframe:true,transparent:true,opacity:.5,blending:THREE.AdditiveBlending,depthWrite:false}));
 aura.position.y=1.05;aura.visible=false;root.add(aura);
 GFX.scene.add(root);
+root.scale.setScalar(.88);
 const vis={root,legL,legR,armL,armR,torso,head,aura,
 phase:U.rand(0,6),
 anim(dt,speed,grounded,crouch){
