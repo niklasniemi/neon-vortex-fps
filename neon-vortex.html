@@ -239,7 +239,7 @@ input[type=color]{pointer-events:auto;width:100%;height:30px;border:1px solid rg
 <script id="main">
 "use strict";
 (function(){
-const CFG={grav:-24,jump:8.0,walk:4.8,sprint:6.9,crouchSpd:2.6,accelG:9,accelA:14,fric:9,airWish:2.2,eyeH:1.62,crouchEye:0.95,feetOff:0.77,radius:0.42};
+const CFG={grav:-24,jump:7.6,walk:4.0,sprint:5.6,crouchSpd:2.2,accelG:8,accelA:12,fric:9,airWish:2.0,eyeH:1.62,crouchEye:0.95,feetOff:0.77,radius:0.42};
 const GRP={WORLD:1,CHAR:2,PROJ:4,SHIELD:8};
 const TEAM_HEX={1:0x35d6ff,2:0xffa23c};
 const TEAM_CSS={1:"#35d6ff",2:"#ffa23c"};
@@ -832,7 +832,7 @@ const WEAPONS={
 cyber_rifle:{
 id:"cyber_rifle",name:"CYBER ASSAULT RIFLE",slot:1,classType:"hitscan",
 damage:14,headMult:1.7,range:150,
-fireRate:.095,mag:30,reserve:180,reload:1.45,
+fireRate:.13,mag:30,reserve:180,reload:1.45,
 spread:.004,bloomPer:.0032,bloomMax:.05,bloomDecay:.12,adsSpreadMult:.4,
 recoil:{pitch:.0042,yaw:.002,kick:.05,shake:.045},
 adsFov:56,tracerColor:0x66d9ff,
@@ -840,14 +840,14 @@ aiRange:[10,26],snd:"shot_rifle",vm:buildRifleVM},
 graviton_shotgun:{
 id:"graviton_shotgun",name:"GRAVITON SHOTGUN",slot:2,classType:"hitscan",
 pellets:12,damage:7,headMult:1.4,range:46,falloff:[16,36,.4],pelletKnock:1.5,
-fireRate:.85,mag:8,reserve:40,reload:2.0,
+fireRate:1.1,mag:8,reserve:40,reload:2.0,
 spread:.075,adsSpreadMult:1,bloomPer:0,bloomMax:.075,bloomDecay:.1,
 recoil:{pitch:.03,yaw:.01,kick:.32,shake:.42},
 adsFov:64,tracerColor:0xb18cff,
 aiRange:[3,9],snd:"shot_shotgun",vm:buildShotgunVM},
 plasma_cannon:{
 id:"plasma_cannon",name:"PLASMA CANNON",slot:3,classType:"projectile",
-fireRate:1.1,mag:8,reserve:24,reload:1.7,
+fireRate:1.4,mag:8,reserve:24,reload:1.7,
 spread:.006,adsSpreadMult:.5,bloomPer:0,bloomMax:.006,bloomDecay:.1,
 recoil:{pitch:.02,yaw:.006,kick:.28,shake:.32},
 adsFov:60,tracerColor:0x7dff5a,
@@ -856,14 +856,14 @@ aiRange:[9,20],snd:"shot_plasma",vm:buildPlasmaVM},
 thermal_railgun:{
 id:"thermal_railgun",name:"THERMAL RAILGUN",slot:4,classType:"charge",
 chargeTime:.75,damage:95,minDamage:34,headMult:1.5,range:220,pierce:true,
-fireRate:1.15,mag:4,reserve:16,reload:2.3,
+fireRate:1.5,mag:4,reserve:16,reload:2.3,
 spread:.001,adsSpreadMult:.3,bloomPer:0,bloomMax:.001,bloomDecay:.1,
 recoil:{pitch:.017,yaw:.004,kick:.36,shake:.36},
 adsFov:30,scope:true,tracerColor:0xff5a3c,
 aiRange:[18,45],snd:"rail_fire",chargeSnd:true,vm:buildRailVM},
 vortex_launcher:{
 id:"vortex_launcher",name:"VORTEX SHOCK LAUNCHER",slot:5,classType:"sticky",
-fireRate:1.4,mag:5,reserve:20,reload:2.1,
+fireRate:1.8,mag:5,reserve:20,reload:2.1,
 spread:.005,adsSpreadMult:.6,bloomPer:0,bloomMax:.005,bloomDecay:.1,
 recoil:{pitch:.016,yaw:.005,kick:.22,shake:.22},
 adsFov:62,tracerColor:0xffe14d,
@@ -1703,8 +1703,8 @@ sun:{p:[26,44,18],i:1.15,c:0xffeecf},
 grade:{tint:[1.1,1.03,.9],amt:.3},bloom:{s:.5,r:.4,t:.86},
 amb:"industrial",surf:"concrete",noPickups:true,
 kinematic:true,
-sites:[{name:"A",x:-22.5,z:-17.5,r:5.5},{name:"B",x:21,z:6,r:5}],
-spCT:[[18.5,-5.8],[16,-7.4],[21,-7.2],[16.4,-4.4],[21,-4.2]],
+sites:[{name:"A",x:-22.5,z:-17.5,r:5.5},{name:"B",x:18.5,z:-5.5,r:5}],
+spCT:[[17.5,-12],[15.6,-13.6],[19.6,-13.8],[15.8,-10.6],[19.8,-10.4]],
 spT:[[21,19.5],[18,21.2],[23.6,21],[19.6,16.8],[23.2,17.4]],
 mid:[1,-.5],
 build(b){}
