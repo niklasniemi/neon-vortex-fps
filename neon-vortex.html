@@ -1134,7 +1134,7 @@ if(!c.alive||c.team!==2||!c.bodyInWorld)continue;
 if(c.body.position.distanceTo(m.bombPos)<1.4){
 m.bombState="carried";m.carrier=c;c.hasBomb=true;
 if(c.isBot){c.objRole="plant";c.objSite=m.sitePlan||"A";c.objPoint=this.rolePoint(m,c);}
-m.bombHide(m);
+this.bombHide(m);
 UI.toast(c===engine.player?"YOU RECOVERED THE BOMB \u2014 PLANT AT A OR B":"BOMB RECOVERED BY "+c.name);
 AUDIO.play("pk_ammo",{pos:m.bombPos});
 break;
@@ -1396,7 +1396,7 @@ resolve();
 }
 function buildAutoNav(b,def){
 const aabb=def.aabb;
-const cell=2;
+const cell=1.25;
 const cols=Math.max(2,Math.ceil((aabb.max[0]-aabb.min[0])/cell));
 const rows=Math.max(2,Math.ceil((aabb.max[2]-aabb.min[2])/cell));
 const hf=new Float32Array(cols*rows).fill(-999);
@@ -1407,12 +1407,16 @@ const x=aabb.min[0]+(ix+.5)*cell,z=aabb.min[2]+(iz+.5)*cell;
 org.set(x,aabb.max[1]+3,z);
 rc.set(org,dn);
 const hits=rc.intersectObjects(PHYS.colliders,false);
-if(!hits.length)continue;
-const h=hits[0];
+let pick=null;
+for(let k=hits.length-1;k>=0;k--){
+const h=hits[k];
 const n=h.face?h.face.normal.clone().transformDirection(h.object.matrixWorld):new THREE.Vector3(0,1,0);
 if(n.y<.62)continue;
 if(h.point.y<aabb.min[1]-.4)continue;
-hf[iz*cols+ix]=h.point.y;
+pick=h;break;
+}
+if(!pick)continue;
+hf[iz*cols+ix]=pick.point.y;
 }
 const hfAt=(x,z)=>{
 const ix=Math.floor((x-aabb.min[0])/cell),iz=Math.floor((z-aabb.min[2])/cell);
@@ -1676,8 +1680,9 @@ hemi:{s:0xfff2d8,g:0x9a7a52,i:.95},ambLight:.18,
 sun:{p:[26,44,18],i:1.15,c:0xffeecf},
 grade:{tint:[1.1,1.03,.9],amt:.3},bloom:{s:.5,r:.4,t:.86},
 amb:"industrial",surf:"concrete",noPickups:true,
-sites:[{name:"A",x:19,z:-7.5,r:5.5},{name:"B",x:-22.5,z:-17.5,r:5.5}],
-spCT:[[19,-12.5],[16,-14.2],[21.6,-14],[17.5,-10.6],[21.2,-10.8]],
+kinematic:true,
+sites:[{name:"A",x:17.5,z:-12,r:5},{name:"B",x:-22.5,z:-17.5,r:5.5}],
+spCT:[[18.5,-5.8],[16,-7.4],[21,-7.2],[16.4,-4.4],[21,-4.2]],
 spT:[[21,19.5],[18,21.2],[23.6,21],[19.6,16.8],[23.2,17.4]],
 mid:[1,-.5],
 build(b){}
@@ -1695,7 +1700,7 @@ this.colliders=[];
 this.removeQueue=[];
 }
 setGravity(g){this.world.gravity.set(0,g,0)}
-addBody(b){this.world.addBody(b)}
+addBody(b){if(b.kin)return;this.world.addBody(b)}
 removeBody(b){
 if(!b)return;
 if(this.removeQueue.includes(b))return;
@@ -1710,6 +1715,9 @@ for(const b of q){try{if(b.world)this.world.removeBody(b)}catch(e){}}
 }
 }
 makeChar(pos){
+if(WORLD&&WORLD.def&&WORLD.def.kinematic){
+return{position:pos.clone(),velocity:new THREE.Vector3(),mass:80,kin:true,userData:{type:"char"}};
+}
 const body=new CANNON.Body({mass:80});
 const s=new CANNON.Sphere(CFG.radius);
 body.addShape(s,new CANNON.Vec3(0,-.35,0));
@@ -1725,6 +1733,7 @@ return body;
 }
 step(dt){this.world.step(1/60,dt,4)}
 ground(body){
+if(body.kin)return this.groundKin(body);
 _va.copy(body.position);_va.y-=CFG.radius+.85;
 _vb.copy(body.position);_vb.y+=.2;
 const from=new CANNON.Vec3(_vb.x,_vb.y,_vb.z),to=new CANNON.Vec3(_va.x,_va.y,_va.z);
@@ -1748,7 +1757,9 @@ c.takeDamage(Math.round(dmg),src,{point:_ve.copy(c.body.position).setY(c.body.po
 if(knock){
 _vd.normalize();_vd.y+=.38;_vd.normalize();
 const dv=knock*t*(c===src?.8:1);
-c.body.applyImpulse(new CANNON.Vec3(_vd.x*dv*c.body.mass,_vd.y*dv*c.body.mass,_vd.z*dv*c.body.mass),c.body.position);
+c.body.velocity.x+=_vd.x*dv;
+c.body.velocity.y+=_vd.y*dv*.8;
+c.body.velocity.z+=_vd.z*dv;
 }
 }
 if(engine.player&&engine.player.alive){
@@ -1787,6 +1798,33 @@ if(!pierce)break;
 }
 }
 return out;
+}
+groundKin(body){
+const g=this.hfAt(body.position.x,body.position.z);
+return{grounded:g>-500&&Math.abs((g+CFG.feetOff)-body.position.y)<.3,ny:1,surf:WORLD.def.surf};
+}
+hfAt(x,z){
+const def=WORLD&&WORLD.def;
+if(!def||!def.hf)return-999;
+const m=def.hfMeta;
+const ix=Math.floor((x-m.minX)/m.cell),iz=Math.floor((z-m.minZ)/m.cell);
+if(ix<0||iz<0||ix>=m.cols||iz>=m.rows)return-999;
+return def.hf[iz*m.cols+ix];
+}
+segChar(from,to,r,exclude){
+let best=null,bd=1e9;
+for(const c of engine.combatants){
+if(!c.alive||!c.bodyInWorld||c===exclude||!c.body)continue;
+const p=c.body.position;
+_vd.set(p.x,p.y+.2,p.z);
+_va.subVectors(to,from);
+const len2=_va.lengthSq();
+let t=len2>0?U.clamp(_vb.subVectors(_vd,from).dot(_va)/len2,0,1):0;
+_vc.copy(from).addScaledVector(_va,t);
+const d=_vc.distanceTo(_vd);
+if(d<r+.5&&d<bd){bd=d;best=c}
+}
+return best;
 }
 losClear(a,b,ignoreComb){
 if(WORLD&&WORLD.def&&WORLD.def.hf)return this.losHF(a,b);
@@ -2001,17 +2039,44 @@ b.velocity.y=WORLD.def.jumpVel*.88;
 AUDIO.play("jump",{pos:b.position,vol:.5});
 FX.preset("puff",_ve.set(b.position.x,b.position.y-CFG.feetOff+.3,b.position.z),{count:6,a:.35});
 }
-if(gr.grounded&&this.slideT<=0&&targetSpeed>0.1){
+if(b.kin)this.integrateKin(dt);
+if(this.groundedInfo&&this.groundedInfo.grounded&&this.slideT<=0&&targetSpeed>0.1){
 const spd=Math.sqrt(b.velocity.x*b.velocity.x+b.velocity.z*b.velocity.z);
 if(spd>2.4){
 this.stepPhase+=spd*dt;
 if(this.stepPhase>3.4){
 this.stepPhase=0;
-AUDIO.play(WORLD.def.surf==="grate"?"step_grate":"step_metal",{pos:b.position,vol:.5});
+AUDIO.play(WORLD.def.surf==="grate"||WORLD.def.surf==="concrete"?"step_grate":"step_metal",{pos:b.position,vol:.5});
 }
 }
 }
 this.padCd-=dt;this.teleCd-=dt;
+}
+integrateKin(dt){
+const b=this.body,p=b.position,v=b.velocity;
+const def=WORLD.def;
+v.y+=def.grav*dt;
+if(v.y<-30)v.y=-30;
+const stepMax=.55,feet=p.y-CFG.feetOff;
+let nx=p.x+v.x*dt;
+let h=PHYS.hfAt(nx,p.z);
+if(h<=-500||h>feet+stepMax){nx=p.x;v.x=0}
+let nz=p.z+v.z*dt;
+h=PHYS.hfAt(nx,nz);
+if(h<=-500||h>feet+stepMax){nz=p.z;v.z=0}
+p.x=U.clamp(nx,WORLD.bounds.minX+.5,WORLD.bounds.maxX-.5);
+p.z=U.clamp(nz,WORLD.bounds.minZ+.5,WORLD.bounds.maxZ-.5);
+let ny=p.y+v.y*dt;
+const g=PHYS.hfAt(p.x,p.z);
+let grounded=false;
+if(g>-500){
+const ty=g+CFG.feetOff;
+if(ny<=ty){
+if(v.y<=.01){ny=ty;v.y=0;grounded=true}
+}else if(v.y<=.01&&p.y>=ty-.05&&p.y-ty<.5){ny=ty;v.y=0;grounded=true}
+}
+p.y=ny;
+this.groundedInfo={grounded:grounded,ny:1,surf:def.surf};
 }
 accelerate(b,wx,wz,wishSpeed,accel,dt){
 if(wx===0&&wz===0)return;
@@ -2119,6 +2184,7 @@ this.body.collisionFilterGroup=GRP.PROJ;
 this.body.collisionFilterMask=GRP.WORLD|GRP.CHAR|GRP.SHIELD;
 this.body.userData={proj:this};
 this.life=4;this.born=engine.time;
+this._prev=origin.clone();
 this._onCollide=e=>this.hit(e);
 this.body.addEventListener("collide",this._onCollide);
 PHYS.addBody(this.body);
@@ -2157,6 +2223,14 @@ if(this.destroyed)return true;
 this.life-=dt;
 if(this.life<=0){this.explode();return true}
 this.mesh.position.copy(this.body.position);
+if(WORLD.def.kinematic&&!this.deadFlag&&engine.time-this.born>.08){
+const hit=PHYS.segChar(this._prev||this.mesh.position,this.mesh.position,this.pr.radius,this.owner);
+this._prev=this.mesh.position.clone();
+if(hit){
+hit.takeDamage(this.pr.directBonus||0,this.owner,{point:this.mesh.position.clone()});
+this.explode();return true;
+}
+}
 FX.preset(this.pr.trail,this.mesh.position,{count:1,speedMult:.5});
 return false;
 }
@@ -2184,6 +2258,7 @@ this.body.collisionFilterGroup=GRP.PROJ;
 this.body.collisionFilterMask=GRP.WORLD|GRP.CHAR|GRP.SHIELD;
 this.body.userData={proj:this};
 this.life=9;this.born=engine.time;
+this._prev=origin.clone();
 this.stuck=false;this.attached=null;this.attachOff=new THREE.Vector3();
 this.pulseLeft=this.pr.pulses;this.pulseT=.4;this.armed=false;
 this._onCollide=e=>this.hit(e);
@@ -2236,6 +2311,19 @@ update(dt){
 if(this.dead)return true;
 this.life-=dt;
 if(this.life<=0){this.detonate();return true}
+if(WORLD.def.kinematic&&!this.stuck&&engine.time-this.born>.08){
+const hit=PHYS.segChar(this._prev||this.mesh.position,this.mesh.position,this.pr.radius,this.owner);
+this._prev=this.mesh.position.clone();
+if(hit){
+AUDIO.play("sticky_stick",{pos:this.mesh.position});
+hit.takeDamage(this.pr.direct,this.owner,{point:this.mesh.position.clone()});
+this.attached=hit;
+this.attachOff.copy(this.mesh.position).sub(hit.body.position);
+this.stuck=true;this.armed=true;this.pulseT=.5;
+this.body.removeEventListener("collide",this._onCollide);
+PHYS.removeBody(this.body);this.body=null;
+}
+}
 if(this.attached){
 if(!this.attached.alive){this.detonate();return true}
 this.mesh.position.copy(this.attached.body.position).add(this.attachOff);
@@ -3080,7 +3168,9 @@ if(h.dist>t0)dmg*=U.lerp(1,f,U.clamp((h.dist-t0)/(t1-t0),0,1));
 }
 h.ud.takeDamage(dmg,ent,{point:h.point.clone(),head:h.part==="head",fromPos:origin});
 if(cfg.pelletKnock&&h.ud.bodyInWorld){
-h.ud.body.applyImpulse(new CANNON.Vec3(dir.x*cfg.pelletKnock*h.ud.body.mass,dir.y*cfg.pelletKnock*h.ud.body.mass+.9,dir.z*cfg.pelletKnock*h.ud.body.mass),h.ud.body.position);
+h.ud.body.velocity.x+=dir.x*cfg.pelletKnock;
+h.ud.body.velocity.y+=dir.y*cfg.pelletKnock*.5+2.2;
+h.ud.body.velocity.z+=dir.z*cfg.pelletKnock;
 }
 }else if(res.wall){
 end=res.wall.point;
