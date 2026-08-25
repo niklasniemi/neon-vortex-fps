@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>DUST II — Tactical FPS</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="c3d"></div>
+  <canvas id="xhair" width="96" height="96" class="layer hidden"></canvas>
+  <div id="vig" class="layer"></div>
+  <div id="dmglayer" class="layer"></div>
+
+  <!-- ================= HUD ================= -->
+  <div id="hud" class="layer hidden">
+    <div id="topbar">
+      <div id="miniscores"></div>
+      <div id="timerchip">--:--</div>
+    </div>
+
+    <div id="radarwrap" class="panel">
+      <span class="rlab">RADAR</span>
+      <canvas id="radar" width="176" height="176"></canvas>
+    </div>
+
+    <div id="netchip" class="chip"><i id="netdot"></i><span id="nettxt">OFFLINE</span></div>
+    <div id="fpschip" class="chip">-- FPS</div>
+    <div id="coordchip" class="chip hidden">X +0.0 · Z +0.0</div>
+
+    <div id="objbar" class="hidden"></div>
+    <div id="progwrap" class="hidden">
+      <div id="proglab">PLANTING</div>
+      <div class="bar"><div id="progfill" class="fill"></div></div>
+    </div>
+    <div id="respawnmsg" class="hidden"></div>
+    <div id="feed"></div>
+    <div id="announce"><div id="annmain"></div><div id="annsub"></div></div>
+
+    <!-- bottom-left: health / armour -->
+    <div id="hpwrap">
+      <div id="vitals">
+        <div class="vrow">
+          <svg class="vico" viewBox="0 0 24 24"><path d="M12 21s-7-4.6-9.3-9A5.4 5.4 0 0 1 12 6.6 5.4 5.4 0 0 1 21.3 12C19 16.4 12 21 12 21z"/></svg>
+          <span id="hpnum">100</span>
+        </div>
+        <div class="bar big"><div id="hpfill" class="fill"></div></div>
+        <div class="vrow">
+          <svg class="vico" viewBox="0 0 24 24"><path d="M12 2l8 3v6.5c0 5-3.4 9.5-8 10.5-4.6-1-8-5.5-8-10.5V5l8-3z"/></svg>
+          <span id="arnum">0</span>
+          <span id="armicon" class="gearico off" title="Kevlar">VEST</span>
+          <span id="helmicon" class="gearico off" title="Helmet">HELM</span>
+          <span id="defusericon" class="gearico off" title="Defuse kit">KIT</span>
+        </div>
+        <div class="bar thin"><div id="arfill" class="fill"></div></div>
+      </div>
+    </div>
+
+    <div id="moneyhud">$ 800</div>
+    <div id="nadebar"></div>
+
+    <!-- bottom-right: weapon -->
+    <div id="ammowrap">
+      <div id="wname">AK-47</div>
+      <div id="ammorow"><span id="magnum">30</span><span id="resnum">/90</span></div>
+      <div id="slots"></div>
+    </div>
+  </div>
+
+  <div id="hitm"><span></span><span></span><span></span><span></span></div>
+  <div id="scope" class="layer hidden"></div>
+  <div id="boardwrap" class="hidden"><table id="board"></table></div>
+  <div id="toast" class="hidden"></div>
+
+  <!-- ================= MENU ================= -->
+  <div id="menu" class="screen">
+    <canvas id="menubg"></canvas>
+    <div class="menushell">
+      <header class="mhead">
+        <div class="mtitle">DUST<span>II</span></div>
+        <div class="msub">TACTICAL FPS &nbsp;·&nbsp; BUILD 2.0</div>
+      </header>
+
+      <button id="m-back" class="backbtn hidden">‹ BACK</button>
+
+      <!-- root -->
+      <section class="mscreen active" data-screen="root">
+        <div class="navlist">
+          <button id="nav-solo" class="navbtn">
+            <b>SINGLE PLAYER</b><small>Play a defusal match against bots</small>
+          </button>
+          <button id="nav-online" class="navbtn">
+            <b>PLAY WITH A FRIEND</b><small>Free peer-to-peer, no server needed</small>
+          </button>
+          <button id="nav-settings" class="navbtn">
+            <b>SETTINGS</b><small>Controls, video and audio</small>
+          </button>
+        </div>
+        <div class="callsign">
+          <label>CALLSIGN</label>
+          <input type="text" id="in-name" maxlength="14" spellcheck="false">
+        </div>
+      </section>
+
+      <!-- single player -->
+      <section class="mscreen" data-screen="solo">
+        <h2>SINGLE PLAYER</h2>
+        <div class="field"><label>Bot Skill</label><div id="sel-diff" class="seg"></div></div>
+        <div class="field"><label>Match Size</label><div id="sel-size" class="seg"></div></div>
+        <div class="field"><label>Your Side</label><div id="sel-side" class="seg"></div></div>
+        <button id="btn-deploy" class="btn primary big">DEPLOY</button>
+      </section>
+
+      <!-- online root -->
+      <section class="mscreen" data-screen="online">
+        <h2>PLAY WITH A FRIEND</h2>
+        <div class="navlist">
+          <button id="btn-host" class="navbtn">
+            <b>HOST A MATCH</b><small>Create a room and share the 4-digit code</small>
+          </button>
+          <button id="btn-joinscreen" class="navbtn">
+            <b>JOIN A MATCH</b><small>Enter a friend's room code</small>
+          </button>
+        </div>
+      </section>
+
+      <!-- join -->
+      <section class="mscreen" data-screen="join">
+        <h2>JOIN A MATCH</h2>
+        <div class="field">
+          <label>Room Code</label>
+          <input type="text" id="in-code" maxlength="4" placeholder="0000" spellcheck="false" class="codein">
+        </div>
+        <button id="btn-join" class="btn primary big">CONNECT</button>
+        <div id="net-status2">NOT CONNECTED</div>
+      </section>
+
+      <!-- lobby -->
+      <section class="mscreen wide" data-screen="lobby">
+        <h2>LOBBY</h2>
+        <div class="lobbytop">
+          <div class="codebox">
+            <label>ROOM CODE</label>
+            <div class="codeval" id="lb-code">----</div>
+            <button id="lb-copy" class="btn tiny">COPY</button>
+          </div>
+          <div id="lb-conn" class="connstate">WAITING FOR A FRIEND…</div>
+          <button id="lb-swap" class="btn tiny">SWAP SIDES</button>
+        </div>
+
+        <div class="teams">
+          <div class="teamcol ct">
+            <h3>COUNTER-TERRORISTS</h3>
+            <div id="lb-team1" class="slots"></div>
+            <div class="botrow">
+              <span>BOTS</span>
+              <button id="lb-bot1-" class="btn tiny">−</button>
+              <b id="lb-bot1n">0</b>
+              <button id="lb-bot1+" class="btn tiny">+</button>
+            </div>
+          </div>
+          <div class="teamcol t">
+            <h3>TERRORISTS</h3>
+            <div id="lb-team2" class="slots"></div>
+            <div class="botrow">
+              <span>BOTS</span>
+              <button id="lb-bot2-" class="btn tiny">−</button>
+              <b id="lb-bot2n">0</b>
+              <button id="lb-bot2+" class="btn tiny">+</button>
+            </div>
+          </div>
+        </div>
+
+        <button id="lb-start" class="btn primary big">START MATCH</button>
+      </section>
+
+      <!-- settings -->
+      <section class="mscreen wide" data-screen="settings" id="settings">
+        <h2>SETTINGS</h2>
+        <div class="stabs">
+          <button class="stab on" data-tab="controls">CONTROLS</button>
+          <button class="stab" data-tab="video">VIDEO</button>
+          <button class="stab" data-tab="audio">AUDIO</button>
+        </div>
+
+        <div class="spane active" data-pane="controls">
+          <div class="field"><label>Mouse Sensitivity <b id="sensval"></b></label><input type="range" id="rng-sens" min="20" max="300"></div>
+          <div class="field"><label>ADS Sensitivity <b id="adssensval"></b></label><input type="range" id="rng-adssens" min="30" max="150"></div>
+          <div class="field"><label>Viewmodel Hand</label><div id="sel-hand" class="seg"></div></div>
+          <div class="field"><label>Crosshair Colour</label><input type="color" id="in-xcolor"></div>
+          <div class="field"><label>Crosshair Size <b id="xsizeval"></b></label><input type="range" id="rng-xsize" min="50" max="250"></div>
+          <div class="tglrow">
+            <button id="tg-dot" class="tgl"></button>
+            <button id="tg-invert" class="tgl"></button>
+            <button id="tg-dmg" class="tgl"></button>
+            <button id="tg-ff" class="tgl"></button>
+          </div>
+        </div>
+
+        <div class="spane" data-pane="video">
+          <div class="field"><label>Field of View <b id="fovval"></b></label><input type="range" id="rng-fov" min="60" max="110"></div>
+          <div class="field"><label>Screen Shake <b id="shakeval"></b></label><input type="range" id="rng-shake" min="0" max="200"></div>
+          <div class="field"><label>Head Bob <b id="bobval"></b></label><input type="range" id="rng-bob" min="0" max="200"></div>
+          <div class="field"><label>Bloom <b id="bloomval"></b></label><input type="range" id="rng-bloom" min="0" max="200"></div>
+        </div>
+
+        <div class="spane" data-pane="audio">
+          <div class="field"><label>Master Volume <b id="volval"></b></label><input type="range" id="rng-vol" min="0" max="100"></div>
+        </div>
+      </section>
+
+      <footer class="mhint">
+        WASD MOVE · SPACE JUMP · SHIFT WALK (SILENT) · CTRL CROUCH · LMB FIRE · RMB AIM · R RELOAD<br>
+        1-3 WEAPONS · G GRENADES · B BUY · E PLANT/DEFUSE · TAB SCOREBOARD · ESC PAUSE
+      </footer>
+    </div>
+  </div>
+
+  <!-- ================= OVERLAYS ================= -->
+  <div id="pause" class="screen hidden">
+    <div class="panel pcol">
+      <div class="phead">PAUSED</div>
+      <button id="btn-resume" class="btn primary">RESUME</button>
+      <button id="btn-quit" class="btn">ABANDON MATCH</button>
+    </div>
+  </div>
+
+  <div id="end" class="screen hidden">
+    <div class="panel pcol wide">
+      <div id="endtitle">VICTORY</div>
+      <div id="endsub"></div>
+      <table id="standings"></table>
+      <div id="endtimer"></div>
+    </div>
+  </div>
+
+  <div id="loading" class="screen hidden">
+    <div class="ring"></div>
+    <div id="loadtxt">LOADING</div>
+  </div>
+
+  <div id="buywrap" class="hidden">
+    <div class="buypanel">
+      <div class="buytop">
+        <span class="buytitle">BUY MENU</span>
+        <span id="buytimer">BUY TIME 20s</span>
+        <span id="buymoney">$800</span>
+      </div>
+      <div id="buygrid"></div>
+      <div id="buyhint">B — CLOSE</div>
+    </div>
+  </div>
+
+  <div id="flashfx"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

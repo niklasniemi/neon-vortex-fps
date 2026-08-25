@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dust2",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "devserver.py",
+        "8123"
+      ],
+      "port": 8123
+    }
+  ]
+}
