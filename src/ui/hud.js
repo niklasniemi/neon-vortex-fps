@@ -274,36 +274,37 @@ const range=42;
 const sc=c/range;
 g.save();
 g.beginPath();g.arc(c,c,c-2,0,7);g.clip();
-g.fillStyle="rgba(8,20,30,.55)";
+g.fillStyle="rgba(14,15,17,.82)";
 g.fillRect(0,0,S,S);
-g.strokeStyle="rgba(79,227,255,.18)";
-for(let r=14;r<c;r+=14){g.beginPath();g.arc(c,c,r,0,7);g.stroke()}
-g.beginPath();g.moveTo(c,0);g.lineTo(c,S);g.moveTo(0,c);g.lineTo(S,c);g.stroke();
 const cy=SETTINGS.mmRotate?Math.cos(p.yaw):1,sy=SETTINGS.mmRotate?Math.sin(p.yaw):0;
 const proj=(wx,wz)=>{
 const dx=wx-p.body.position.x,dz=wz-p.body.position.z;
 return[c+(dx*cy+dz*sy)*sc,c+(dx*sy+dz*cy)*sc];
 };
-g.fillStyle="rgba(79,227,255,.14)";
+// Floor plan, rasterised from the span field at load time. Drawn with the
+// same transform `proj` uses so the map and the blips stay in register.
+const mm=WORLD.minimap;
+if(mm){
+g.save();
+g.imageSmoothingEnabled=true;
+g.setTransform(cy*sc,sy*sc,sy*sc,cy*sc,c,c);
+g.globalAlpha=.85;
+g.drawImage(mm.canvas,mm.minX-p.body.position.x,mm.minZ-p.body.position.z,mm.w,mm.d);
+g.restore();
+}else{
+// Fallback for arenas built from boxes rather than a mesh.
+g.fillStyle="rgba(214,196,158,.16)";
 for(const r of WORLD.mmRects){
 const pts=[[r.x-r.w/2,r.z-r.d/2],[r.x+r.w/2,r.z-r.d/2],[r.x+r.w/2,r.z+r.d/2],[r.x-r.w/2,r.z+r.d/2]];
 g.beginPath();
 pts.forEach(([wx,wz],i)=>{const[x,y]=proj(wx,wz);i?g.lineTo(x,y):g.moveTo(x,y)});
 g.closePath();g.fill();
 }
-if(WORLD.cpDef){
-const[x,y]=proj(WORLD.cpDef.p.x,WORLD.cpDef.p.z);
-g.strokeStyle=MATCH.cpOwner===1?"#4fe3ff":MATCH.cpOwner===2?"#ffc24d":"rgba(200,220,240,.7)";
-g.lineWidth=2;
-g.beginPath();g.arc(x,y,5,0,7);g.stroke();
 }
-for(const pk of engine.entities){
-if(pk.type==="pickup"&&pk.active){
-const[x,y]=proj(pk.p.x,pk.p.z);
-g.fillStyle=pk.kind==="health"?"#37ff8f":pk.kind==="ammo"?"#ffe14d":"#ff7ae0";
-g.fillRect(x-1.5,y-1.5,3,3);
-}
-}
+// Range rings sit over the plan, not under it.
+g.strokeStyle="rgba(226,176,74,.14)";g.lineWidth=1;
+for(let r=14;r<c;r+=14){g.beginPath();g.arc(c,c,r,0,7);g.stroke()}
+g.beginPath();g.moveTo(c,0);g.lineTo(c,S);g.moveTo(0,c);g.lineTo(S,c);g.stroke();
 if(MATCH.mode.id==="defuse"&&WORLD.def.sites){
 g.font="800 11px Segoe UI,Arial";g.textAlign="center";g.textBaseline="middle";
 for(const st of WORLD.def.sites){
@@ -326,7 +327,7 @@ const dx=e.body.position.x-p.body.position.x,dz=e.body.position.z-p.body.positio
 if(dx*dx+dz*dz>range*range)continue;
 const[x,y]=proj(e.body.position.x,e.body.position.z);
 const mate=MATCH.mode.teams&&e.team===p.team;
-g.fillStyle=mate?"#4fe3ff":"#ff4d5e";
+g.fillStyle=mate?"#8fb3d9":"#cf4d46";
 g.beginPath();g.arc(x,y,3,0,7);g.fill();
 if(e===MATCH.lastShooter&&engine.time-MATCH.lastShotT<.5&&!mate){
 g.strokeStyle="rgba(255,77,94,.8)";

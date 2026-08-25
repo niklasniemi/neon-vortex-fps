@@ -36,6 +36,9 @@ no-cache headers so edits show up on reload.
 **One map, one mode.** Dust II, bomb defusal, MR15. The arcade arenas, jump pads,
 teleporters, lava and floating pickups are gone.
 
+**Radar.** A floor plan rasterised from the collision field at load time, with walls,
+elevation shading, bombsite labels and live blips. It rotates with you.
+
 **Counter-Strike weapon model.** AK-47, M4A1-S, AWP, MP9, Nova, Desert Eagle,
 Glock-18, USP-S and a knife, with CS damage, armour penetration and fire rates
 (scaled to this build's slower tempo). Rifles have learnable spray patterns.
@@ -75,7 +78,7 @@ exactly, so modules can reference each other without circular-import problems.
 
 ## Tests
 
-98 checks across six suites, run from the browser console after starting a match:
+108 checks across eight suites, run from the browser console after starting a match:
 
 ```js
 import('/tests/all.js').then(m => m.run()).then(console.log)
@@ -91,6 +94,8 @@ import('/tests/physics.test.js').then(m => console.table(m.run()))
 | Suite | Covers |
 |---|---|
 | `physics` | jump arc, wall sweeps, ceiling clamp, crouch |
+| `slope` | vertical jerk walking up and down the map's hill |
+| `walls` | thousands of bot-frames with no clipping or falling out of the world |
 | `lobby` | bot composition, team clamping, host/guest permissions |
 | `gameplay` | buy window rules, purchases, regeneration, armour maths |
 | `firing` | every weapon lands damage, ammo, movement penalty |

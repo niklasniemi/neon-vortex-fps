@@ -145,6 +145,36 @@ export class SpanField{
     return s?s.floor:-999;
   }
 
+  /**
+   * Highest floor in this cell lying within [minY, maxY].
+   *
+   * This is the SWEPT landing test. `spanAt` only ever looks at floors at or
+   * below the body, so once a character dropped past a floor it could never
+   * re-acquire it and fell forever -- which is what sent bots through the map
+   * and out the bottom of the world. Passing the span the body travelled
+   * through this frame catches the floor it actually crossed.
+   *
+   * @returns {number|null} floor height, or null if nothing was crossed
+   */
+  floorBetween(x,z,minY,maxY){
+    const ci=this.idx(x,z);
+    if(ci<0)return null;
+    const n=this.count[ci];
+    let best=null;
+    for(let i=0;i<n;i++){
+      const f=this.floors[ci*MAX_SPANS+i];
+      if(f<minY||f>maxY)continue;
+      if(best===null||f>best)best=f;
+    }
+    return best;
+  }
+
+  /** True when the cell has any walkable span at all. */
+  hasFloor(x,z){
+    const ci=this.idx(x,z);
+    return ci>=0&&this.count[ci]>0;
+  }
+
   /** Lowest ceiling strictly above y. Infinity when open to the sky. */
   ceilAt(x,z,y){
     const s=this.spanAt(x,z,y,.6);
@@ -235,6 +265,90 @@ export class SpanField{
       if(!inFree)return false;
     }
     return true;
+  }
+
+  /**
+   * Renders a top-down image of the walkable map, once, at load time.
+   *
+   * The radar previously drew from ArenaBuilder.mmRects, which is only filled by
+   * box() -- and the GLB map never calls box(), so the array was empty and the
+   * minimap showed nothing but its own grid rings. Rasterising the span field
+   * gives a real floor plan instead.
+   *
+   * @returns {{canvas:HTMLCanvasElement,minX:number,minZ:number,w:number,d:number}}
+   */
+  renderMinimap(){
+    const cols=this.cols, rows=this.rows;
+    const cv=document.createElement("canvas");
+    cv.width=cols;cv.height=rows;
+    const g=cv.getContext("2d");
+    const img=g.createImageData(cols,rows);
+    const px=img.data;
+
+    // Ground height per cell, and whether a body fits there.
+    const ground=new Float32Array(cols*rows).fill(NaN);
+    for(let iz=0;iz<rows;iz++)for(let ix=0;ix<cols;ix++){
+      const ci=iz*cols+ix;
+      if(!this.count[ci])continue;
+      const x=this.minX+(ix+.5)*this.cell, z=this.minZ+(iz+.5)*this.cell;
+      const f=this.groundFloorAt(x,z);
+      if(f<-900)continue;
+      ground[ci]=f;
+    }
+
+    // A cell standing well above its surroundings is the TOP of a wall or roof,
+    // not floor you could stand on. Classifying purely by "has a span" marks
+    // wall tops as walkable and the whole map renders as one flat blob.
+    const R=3;
+    const localMin=new Float32Array(cols*rows).fill(NaN);
+    for(let iz=0;iz<rows;iz++)for(let ix=0;ix<cols;ix++){
+      const ci=iz*cols+ix;
+      if(isNaN(ground[ci]))continue;
+      let lo=Infinity;
+      for(let dz=-R;dz<=R;dz++)for(let dx=-R;dx<=R;dx++){
+        const jx=ix+dx, jz=iz+dz;
+        if(jx<0||jz<0||jx>=cols||jz>=rows)continue;
+        const v=ground[jz*cols+jx];
+        if(!isNaN(v)&&v<lo)lo=v;
+      }
+      localMin[ci]=isFinite(lo)?lo:ground[ci];
+    }
+
+    let lo=Infinity,hi=-Infinity;
+    for(let i=0;i<cols*rows;i++){
+      if(isNaN(ground[i]))continue;
+      if(ground[i]<lo)lo=ground[i];
+      if(ground[i]>hi)hi=ground[i];
+    }
+    const range=Math.max(.001,hi-lo);
+
+    for(let i=0;i<cols*rows;i++){
+      const o=i*4;
+      const f=ground[i];
+      if(isNaN(f)){px[o+3]=0;continue}            // nothing here -- transparent
+
+      const x=this.minX+((i%cols)+.5)*this.cell;
+      const z=this.minZ+(Math.floor(i/cols)+.5)*this.cell;
+      const span=this.spanAt(x,z,f+.05,.35);
+      const fits=span&&(span.ceil-span.floor)>=1.2;
+      const raised=f-localMin[i];                 // height above its surroundings
+
+      if(!fits||raised>1.0){
+        // Wall, roof or something you cannot occupy -- draw it as structure.
+        px[o]=44;px[o+1]=40;px[o+2]=34;px[o+3]=225;
+      }else{
+        // Walkable floor, shaded by elevation so ramps and levels read.
+        const t=(f-lo)/range;
+        px[o  ]=138+t*92;
+        px[o+1]=122+t*86;
+        px[o+2]=92+t*74;
+        px[o+3]=isFinite(span.ceil)?205:235;      // covered ground slightly dimmer
+      }
+    }
+    g.putImageData(img,0,0);
+
+    return {canvas:cv,minX:this.minX,minZ:this.minZ,
+            w:cols*this.cell,d:rows*this.cell};
   }
 
   /** Raise the floor of the span a prop sits in, so bots path over crates. */

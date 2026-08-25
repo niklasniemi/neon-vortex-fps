@@ -42,6 +42,26 @@ function canOccupy(SF,x,z,feet,h,ax,sgn){
   return true;
 }
 
+/**
+ * Nearest cell with a walkable floor, searched outward in rings.
+ * Used to rescue a body that has somehow ended up below the world.
+ */
+function nearestStandable(SF,x,z,floorY){
+  const step=SF.cell*2;
+  for(let r=0;r<=24;r++){
+    for(let a=0;a<Math.max(1,r*8);a++){
+      const ang=a/Math.max(1,r*8)*Math.PI*2;
+      const sx=x+Math.cos(ang)*r*step, sz=z+Math.sin(ang)*r*step;
+      const f=SF.groundFloorAt(sx,sz);
+      if(f>-900&&f>floorY-2){
+        const s=SF.spanAt(sx,sz,f+.05,CFG.stepMax);
+        if(s&&s.ceil-s.floor>=CFG.standHeight)return{x:sx,z:sz,y:f};
+      }
+    }
+  }
+  return null;
+}
+
 /** Body clearance needed right now, blended over the crouch transition. */
 export function bodyHeight(ent){
   return U.lerp(CFG.standHeight,CFG.crouchHeight,U.clamp(ent.crouchAmt||0,0,1));
@@ -61,7 +81,36 @@ export function integrateKinematic(ent,dt){
   const h=bodyHeight(ent);
   let feet=p.y-CFG.feetOff;
 
-  // --- horizontal sweep ----------------------------------------------------
+  // --- horizontal -----------------------------------------------------------
+  // Some map meshes are hollow shells: four vertical faces and no top or bottom
+  // (the CT tunnel walls are literally 8 triangles, all vertical). A downward
+  // ray passes straight through them, so the span field cannot see them at all
+  // and the mesh rays below are the ONLY thing that stops you. They used to run
+  // after the position had already been written, correcting velocity for a
+  // frame that had happened -- so you walked through the wall and were nudged
+  // afterwards. They now run first, and a swept check confirms the result.
+  const startX=p.x, startZ=p.z;
+
+  const sp0=Math.hypot(v.x,v.z);
+  if(sp0>.005){
+    const travel=sp0*dt;
+    _vd.set(v.x/sp0,0,v.z/sp0);
+    let wallN=null;
+    // Sample only ABOVE step height. The riser of a stair or the lip of a ramp
+    // is a vertical face too, and treating it as a wall makes every step
+    // unclimbable -- stepping over it is what CFG.stepMax is for.
+    for(const hh of[CFG.stepMax+.12,.85,1.15]){
+      if(hh>h)break;
+      _vf.set(p.x,p.y-CFG.feetOff+hh,p.z);
+      const n=PHYS.rayWall(_vf,_vd,CFG.radius+travel+.05);
+      if(n){wallN=n;break}
+    }
+    if(wallN){
+      const d=v.x*wallN.x+v.z*wallN.z;
+      if(d<0){v.x-=wallN.x*d;v.z-=wallN.z*d}   // slide along the face
+    }
+  }
+
   const sp=Math.hypot(v.x,v.z);
   if(sp>1e-4){
     // Substep so a fast body cannot tunnel through a thin wall in one frame.
@@ -83,21 +132,23 @@ export function integrateKinematic(ent,dt){
     }
   }
 
-  // Thin, single-sided geometry (a plane with no thickness) never registers in
-  // the span stack, so keep the old sweep rays as a second line of defence.
-  const sp2=Math.hypot(v.x,v.z);
-  if(sp2>.01){
-    _vd.set(v.x/sp2,0,v.z/sp2);
-    let wallN=null;
-    for(const hh of[.14,.42,.80]){
-      if(hh>h)break;
-      _vf.set(p.x,p.y-CFG.feetOff+hh,p.z);
-      const n=PHYS.rayWall(_vf,_vd,CFG.radius+.10);
-      if(n){wallN=n;break}
-    }
-    if(wallN){
-      const d=v.x*wallN.x+v.z*wallN.z;
-      if(d<0){v.x-=wallN.x*d;v.z-=wallN.z*d}
+  // Swept confirmation. If the step we just took crossed a wall face anyway,
+  // undo it. Only counts faces we moved INTO, so sliding along a wall is not
+  // mistaken for crossing it.
+  {
+    const mdx=p.x-startX, mdz=p.z-startZ;
+    const mdist=Math.hypot(mdx,mdz);
+    if(mdist>1e-4){
+      _vd.set(mdx/mdist,0,mdz/mdist);
+      for(const hh of[CFG.stepMax+.12,1.0]){
+        if(hh>h)continue;
+        _vf.set(startX,p.y-CFG.feetOff+hh,startZ);
+        const n=PHYS.rayWall(_vf,_vd,mdist+.02);
+        if(n&&(n.x*_vd.x+n.z*_vd.z)<-.15){
+          p.x=startX;p.z=startZ;v.x=0;v.z=0;
+          break;
+        }
+      }
     }
   }
 
@@ -108,19 +159,32 @@ export function integrateKinematic(ent,dt){
 
   // --- vertical ------------------------------------------------------------
   feet=p.y-CFG.feetOff;
-  const span=SF.spanAt(p.x,p.z,feet+.02,CFG.stepMax);
+  const ny=p.y+v.y*dt;
+  const newFeet=ny-CFG.feetOff;
   let grounded=false;
 
-  if(span){
-    const ty=span.floor+CFG.feetOff;
-    const ny=p.y+v.y*dt;
-
-    if(v.y<=0){
-      if(ny<=ty){
-        // Landed this frame.
-        p.y=ty;v.y=0;grounded=true;
-      }else if(ent.snapDown&&(p.y-ty)<=CFG.stepMax+.06){
-        // Walking off a kerb: stay glued instead of briefly going airborne.
+  if(v.y<=0){
+    // SWEPT landing: catch any floor the body passed through this frame, not
+    // just one near where it started. The old test asked spanAt() for a floor
+    // at or below the CURRENT feet, so a body that had already dropped below a
+    // floor could never re-acquire it and fell forever.
+    // While walking, look a little BELOW the feet as well. Smoothing lifts the
+    // body above the raw cell floor it was derived from, and a strict sweep
+    // then fails to find any floor at all -- the body free-falls for a few
+    // frames and snaps back, which is the vibration felt on slopes. Airborne
+    // bodies keep the strict sweep so they cannot be caught by a distant floor.
+    const lo=ent.snapDown?Math.min(newFeet,feet)-CFG.stepMax:newFeet-.02;
+    const land=SF.floorBetween(p.x,p.z,lo,feet+CFG.stepMax);
+    if(land!==null){
+      // Blend across the cell grid so ramps read as a slope, not as stairs.
+      // Bounded to a fraction of a cell: interpolating a discrete field puts
+      // the body between neighbouring cell floors, and without a limit that
+      // shows up as feet sinking into the ground on steep ground.
+      const smooth=SF.smoothFloor(p.x,p.z,land+.05);
+      const lim=SF.cell*.55;
+      const target=isFinite(smooth)?U.clamp(smooth,land-lim,land+lim):land;
+      const ty=target+CFG.feetOff;
+      if(ny<=ty||(ent.snapDown&&(p.y-ty)<=CFG.stepMax+.06)){
         p.y=ty;v.y=0;grounded=true;
       }else{
         p.y=ny;                            // genuine fall -- let the arc play out
@@ -128,20 +192,35 @@ export function integrateKinematic(ent,dt){
     }else{
       p.y=ny;
     }
+  }else{
+    p.y=ny;
+  }
 
-    // Ceiling clamp -- this is what stops jumping up through a roof.
-    // `p.y` is the body reference point; feet sit at p.y - feetOff and the head
-    // at p.y - feetOff + h. Requiring head <= ceil gives the limit below.
-    if(isFinite(span.ceil)){
+  // Ceiling clamp -- this is what stops jumping up through a roof.
+  // `p.y` is the body reference point; feet sit at p.y - feetOff and the head
+  // at p.y - feetOff + h. Requiring head <= ceil gives the limit below.
+  {
+    const span=SF.spanAt(p.x,p.z,p.y-CFG.feetOff+.02,CFG.stepMax);
+    if(span&&isFinite(span.ceil)){
       const maxY=span.ceil+CFG.feetOff-h;
       if(p.y>maxY){
         p.y=maxY;
         if(v.y>0)v.y=0;                    // bonk
       }
     }
-  }else{
-    // Void cell (off-mesh). Fall, and let the bounds clamp / respawn handle it.
-    p.y+=v.y*dt;
+  }
+
+  // Last-resort recovery. Whatever the cause -- a gap in the map mesh, a shove
+  // from another body -- nothing should be able to fall out of the world and
+  // keep going. Put them back on the nearest floor instead.
+  const floorY=WORLD.def.aabb?WORLD.def.aabb.min[1]:-999;
+  if(p.y<floorY-4){
+    const rescue=nearestStandable(SF,p.x,p.z,floorY);
+    if(rescue){
+      p.x=rescue.x;p.z=rescue.z;p.y=rescue.y+CFG.feetOff;
+      v.set(0,0,0);
+      grounded=true;
+    }
   }
 
   // A jump must not be immediately re-glued to the floor by snap-down.
@@ -171,9 +250,25 @@ export function accelerate(b,wx,wz,wishSpeed,accel,dt){
   b.velocity.x+=wx*acc;b.velocity.z+=wz*acc;
 }
 
-/** Soft separation so operators do not stack inside one another. */
+/**
+ * Soft separation so operators do not stack inside one another.
+ * Each nudge is validated against the span field first -- this used to write
+ * positions directly, which could shove a body into a wall or off a ledge.
+ */
 export function pushApart(list){
+  const SF=WORLD&&WORLD.spans;
   const r=CFG.radius*2.05;
+  const nudge=(ent,dx,dz)=>{
+    const p=ent.body.position;
+    if(!SF){p.x+=dx;p.z+=dz;return}
+    const feet=p.y-CFG.feetOff;
+    const h=bodyHeight(ent);
+    if(SF.fits(p.x+dx,p.z+dz,feet,h,CFG.stepMax)){p.x+=dx;p.z+=dz;return}
+    // Blocked diagonally -- try each axis on its own so bodies still separate
+    // along a wall instead of locking together against it.
+    if(SF.fits(p.x+dx,p.z,feet,h,CFG.stepMax))p.x+=dx;
+    else if(SF.fits(p.x,p.z+dz,feet,h,CFG.stepMax))p.z+=dz;
+  };
   for(let i=0;i<list.length;i++){
     const a=list[i];if(!a.alive||!a.body)continue;
     for(let j=i+1;j<list.length;j++){
@@ -185,8 +280,8 @@ export function pushApart(list){
       if(d2>=r*r||d2<1e-6)continue;
       const d=Math.sqrt(d2), push=(r-d)*.5;
       const nx=dx/d, nz=dz/d;
-      a.body.position.x-=nx*push;a.body.position.z-=nz*push;
-      c.body.position.x+=nx*push;c.body.position.z+=nz*push;
+      nudge(a,-nx*push,-nz*push);
+      nudge(c, nx*push, nz*push);
     }
   }
 }

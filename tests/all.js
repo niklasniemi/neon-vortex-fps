@@ -5,7 +5,7 @@
 // bots, running the player into walls, forcing round phases -- so sharing one
 // match between them makes results depend on execution order rather than on
 // the code under test.
-const SUITES=["physics","lobby","gameplay","firing","bots","rounds"];
+const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds"];
 
 function freshMatch(){
   const e=window.engine;
@@ -18,16 +18,31 @@ function freshMatch(){
   N.lobby.bots={1:4,2:5};
   N.lobby.started=true;
   return new Promise((resolve,reject)=>{
+    // deploy() is a no-op while a match is running (it guards against a
+    // double-click on DEPLOY). Without quitting first, every suite silently
+    // shared ONE match -- which is what made the bot checks look flaky.
+    if(e.state==="playing")e.quitToMenu();
     e.deploy("dust2","defuse");
     let waited=0;
     const id=setInterval(()=>{
       waited+=100;
-      if(e.state==="playing"&&window.NV.WORLD&&window.NV.WORLD.spans){
+      const M=window.NV.MATCH;
+      // Wait for the ROUND to be set up, not just for the match to exist.
+      // startMatch resolves the map asynchronously and assigns the bomb carrier
+      // and per-round roles at the end; handing a suite a half-initialised
+      // match is what made the bot checks look flaky.
+      const ready=e.state==="playing"
+        && window.NV.WORLD && window.NV.WORLD.spans
+        && M && M.mode && M.mode.roundBased
+        && !!M.carrier
+        && e.combatants.filter(c=>c.isBot).length>0;
+      if(ready){
         clearInterval(id);
-        // Let the round settle into its freeze phase before handing over.
-        setTimeout(resolve,60);
-      }else if(waited>20000){
-        clearInterval(id);reject(new Error("match never started (state="+e.state+")"));
+        setTimeout(resolve,80);
+      }else if(waited>25000){
+        clearInterval(id);
+        reject(new Error("match never finished starting (state="+e.state+
+          ", carrier="+(M&&M.carrier?"yes":"no")+")"));
       }
     },100);
   });
@@ -38,7 +53,8 @@ export async function run(){
   for(const s of SUITES){
     await freshMatch();
     const m=await import(`/tests/${s}.test.js?t=${Date.now()}`);
-    for(const r of m.run())all.push({suite:s,...r});
+    const fn=m.runChecks||m.run;
+    for(const r of fn())all.push({suite:s,...r});
   }
   const fails=all.filter(r=>r.result==="FAIL");
   return {

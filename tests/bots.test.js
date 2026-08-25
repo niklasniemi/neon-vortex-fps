@@ -52,6 +52,14 @@ export function run(){
     const b=bots.find(x=>x.alive)||bots[0];
     b.alive=true;b.health=100;b.blindT=0;b.target=null;b.memory=0;
     b.path=null;b.pathI=0;b.repathT=0;b.stuckT=0;
+    // defusalBrain drops everything to fight when it sees an enemy, so the walk
+    // would sometimes measure an engagement instead. Take the others off the
+    // board for the duration.
+    const hidden=[];
+    for(const o of e.combatants){
+      if(o===b||!o.alive)continue;
+      hidden.push(o);o.alive=false;
+    }
 
     const here=b.body.position.clone();
     let far=null,farD=0;
@@ -67,6 +75,7 @@ export function run(){
     const endD=b.objPoint?b.body.position.distanceTo(b.objPoint):0;
     const closed=startD-endD;
 
+    for(const o of hidden)o.alive=true;
     check("bots: walk toward their objective", closed>1.5,
       `closed ${closed.toFixed(2)}m of ${startD.toFixed(1)}m in 7s`);
 
@@ -147,7 +156,9 @@ export function run(){
 
     const ts=bots.filter(b=>b.team===2);
     // Uses the snapshot taken before combat, for the reason noted above.
-    const carrier=carrierAtStart;
+    // A carrier who dies drops the bomb and clears MATCH.carrier, which is
+    // correct -- so accept either the snapshot or whoever now holds it.
+    const carrier=carrierAtStart||M.carrier||e.combatants.find(c=>c.hasBomb);
     check("bots: a terrorist carries the bomb",
       !!carrier, carrier?`${carrier.name}`:"no carrier assigned");
     check("bots: the carrier is on the terrorist side",

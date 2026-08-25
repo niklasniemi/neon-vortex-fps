@@ -54,7 +54,7 @@ const _bodies=PHYS.world.bodies.slice();
 for(const _b of _bodies){try{if(_b.world)PHYS.world.removeBody(_b)}catch(e){}}
 PHYS.removeQueue.length=0;
 FX.scroll.length=0;
-WORLD=null;
+setWORLD(null);
 }
 NET.dispose();
 this.player=null;
@@ -115,6 +115,7 @@ spans:spans,
 navDefs:b.navDefs,
 navLinks:b.navLinks,
 mmRects:b.mmRects,
+minimap:spans?spans.renderMinimap():null,
 smokes:[],fires:[]
 });
 GFX.scene.add(b.group);
