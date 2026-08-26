@@ -125,6 +125,23 @@ if(this.onSpawned)this.onSpawned();
 AUDIO.play("spawn",{pos:this.body.position,vol:.5,force:true});
 }
 refillAmmo(){for(const s of this.slots){if(!s.cfg)continue;s.mag=s.cfg.mag;s.reserve=s.cfg.reserve;s.reloading=0;s.cd=.3;s.bloom=0;s.shotIdx=0}}
+/**
+ * Removes this combatant from the match entirely: no body, no meshes, no HUD
+ * presence. Used when the local player takes over a team-mate -- that operator
+ * becomes you, so two of them must not remain on the board.
+ */
+despawn(){
+this.alive=false;
+this.dead=true;
+if(this.bodyInWorld){PHYS.removeBody(this.body);this.bodyInWorld=false}
+if(this.visual&&this.visual.root&&GFX)GFX.scene.remove(this.visual.root);
+if(this.hitRoot&&GFX)GFX.scene.remove(this.hitRoot);
+const i=engine.combatants.indexOf(this);
+if(i>=0)engine.combatants.splice(i,1);
+const j=engine.entities.indexOf(this);
+if(j>=0)engine.entities.splice(j,1);
+}
+
 takeDamage(amount,src,info={}){
 if(!this.alive)return 0;
 if(this.puppet&&!info.net)return 0;

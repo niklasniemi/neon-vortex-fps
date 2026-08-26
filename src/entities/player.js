@@ -5,6 +5,7 @@ import {GFX,PHYS,AUDIO,FX,INPUT,UI,WPN,MATCH,NET,WORLD,engine} from '../core/glo
 import {WEAPONS,NADE_DEFS,NADE_ORDER,standardLoadout,defaultPistol} from '../game/weapons.js';
 import {matStd} from '../render/textures.js';
 import {NET2} from '../net/p2p.js';
+import {Cheats} from '../game/cheats.js';
 import {Combatant} from './combatant.js';
 import {buildCharMesh} from './charmesh.js';
 
@@ -25,7 +26,7 @@ this.vmRoot=new THREE.Group();
 GFX.vmScene.add(this.vmRoot);
 this.vms={};
 this.swayX=0;this.swayY=0;
-this.deathOrbit=0;this.killerRef=null;
+this.deathOrbit=0;this.killerRef=null;this.takeoverT=-1;
 this.beatT=0;this.stepSurf="metal";
 this.makeHitMeshes();
 }
@@ -69,10 +70,21 @@ return out;
 update(dt){
 if(this.puppet){this.puppetUpdate(dt);return}
 if(!this.alive){
+if(this.takeoverT>0){
+this.takeoverT-=dt;
+if(this.takeoverT<=0&&!this.takeOverTeammate()){
+// Everyone died while we were waiting -- settle into spectating.
+this.takeoverT=-1;
+UI.respawnShow("ELIMINATED — SPECTATING");
+}
+}
+if(!this.alive){
 this.updateDeathCam(dt);
 UI.scope(false);
 return;
 }
+}
+Cheats.tick(this);
 this.readInput(dt);
 if(MATCH.phase==="warmup"){
 this.ctrl.mx=0;this.ctrl.mz=0;this.ctrl.jump=false;this.ctrl.fire=false;this.ctrl.sprint=false;
@@ -310,6 +322,79 @@ this.body.position.set(e.x,e.y,e.z);this.body.velocity.set(0,0,0);
 this.refillAmmo();this.onSpawned();
 UI.respawnHide();
 }
+/**
+ * Death. With the takeover rule on, queue a hop into a surviving team-mate
+ * rather than spectating the rest of the round out.
+ */
+onDeath(src,info){
+this.killerRef=src;
+this.takeoverT=(SETTINGS.takeover&&MATCH.mode.roundBased&&!MATCH.remote)?1.5:-1;
+if(this.takeoverT>0&&!this.livingMates().length)this.takeoverT=-1;
+UI.respawnShow(this.takeoverT>0?"ELIMINATED — SWITCHING TO A TEAM-MATE":"ELIMINATED — SPECTATING");
+}
+
+livingMates(){
+return engine.combatants.filter(c=>c.isBot&&c.alive&&c.team===this.team&&c!==this);
+}
+
+/**
+ * Takes over a random surviving team-mate. The Player object is reused and
+ * adopts that operator's body, gear and position; the bot is removed so the
+ * team count is unchanged. Reusing the Player keeps every consumer -- HUD,
+ * view models, aiming, recoil -- working exactly as before.
+ * @returns {boolean} whether a takeover happened
+ */
+takeOverTeammate(){
+const mates=this.livingMates();
+if(!mates.length)return false;
+const host=U.pick(mates);
+
+// Adopt the operator's loadout before the body, so the view model that gets
+// shown on spawn is the one they were actually carrying.
+this.buildSlots(host.slots.map(sl=>sl.id));
+for(let i=0;i<this.slots.length;i++){
+const src=host.slots[i], dst=this.slots[i];
+if(!src||!dst||!dst.cfg)continue;
+dst.mag=src.mag;dst.reserve=src.reserve;
+dst.cd=.25;dst.reloading=0;dst.bloom=0;dst.shotIdx=0;
+}
+this.curSlot=Math.max(0,host.curSlot);
+if(!this.slots[this.curSlot]||!this.slots[this.curSlot].cfg)
+this.curSlot=this.slots.findIndex(sl=>sl.cfg);
+
+this.health=host.health;
+this.armour=host.armour;this.helmet=host.helmet;this.hasDefuser=host.hasDefuser;
+this.money=host.money;
+this.nades=Object.assign({},host.nades);
+this.leftSpawn=host.leftSpawn;
+this.lostGear=false;
+
+// Take the bomb with them if they were carrying it.
+const carriedBomb=!!host.hasBomb;
+
+const pos=host.body.position.clone();
+const yaw=host.visYaw!==undefined?host.visYaw:host.yaw;
+host.despawn();
+
+this.spawnBody(pos,yaw);
+this.alive=true;
+this.protectT=0;                       // no free pass -- you inherit the fight
+this.crouchAmt=0;this.snapDown=true;
+this.pitch=0;this.recoil.p=this.recoil.y=this.recoil.vp=this.recoil.vy=0;
+this.deathOrbit=0;this.killerRef=null;this.takeoverT=-1;
+this.hasBomb=carriedBomb;
+if(carriedBomb)MATCH.carrier=this;
+this.takeoverFrom=host;          // who you are now playing as
+
+if(this.onSpawned)this.onSpawned();
+UI.respawnHide();
+UI.slotsDirty=true;
+UI.announce("TAKING OVER",host.name);
+UI.toast("NOW PLAYING AS "+host.name);
+AUDIO.play("spawn",{pos:this.body.position,vol:.5,force:true});
+return true;
+}
+
 updateDeathCam(dt){
 this.deathOrbit+=dt*.7;
 const p=this.body.position;

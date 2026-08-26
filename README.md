@@ -31,6 +31,8 @@ no-cache headers so edits show up on reload.
 | `Tab` | Scoreboard |
 | `Esc` | Pause |
 
+Optional rules live under Settings → Rules.
+
 ## What's in it
 
 **One map, one mode.** Dust II, bomb defusal, MR15. The arcade arenas, jump pads,
@@ -52,6 +54,16 @@ own spawn *provided you have not moved yet* — stepping out latches the shop sh
 
 **Bots with orders.** Per-round objectives over an auto-generated nav graph: Ts escort
 the carrier and plant, flankers rotate, CTs split the sites with a mid roamer.
+
+**Optional rules** (Settings → Rules).
+*Take over a team-mate on death* — when you are killed with team-mates still
+alive, you drop into a random survivor for the rest of the round instead of
+spectating. It is not a free respawn: you inherit that operator's position,
+health, armour, weapon, magazine, grenades and money, and they leave the board,
+so your side is exactly as strong as your death left it.
+*Unlimited ammo / grenades / money* — practice toggles. Local only: a P2P guest
+is simulated by the host, so they cannot take effect there, and they never apply
+to bots. A HUD badge shows which are active.
 
 **Friend play.** PeerJS WebRTC, host-authoritative, 4-digit room codes, zero server cost.
 The lobby lets you add and remove bots per team, and bot counts are explicit — a 1v1
@@ -78,7 +90,7 @@ exactly, so modules can reference each other without circular-import problems.
 
 ## Tests
 
-108 checks across eight suites, run from the browser console after starting a match:
+136 checks across nine suites, run from the browser console after starting a match:
 
 ```js
 import('/tests/all.js').then(m => m.run()).then(console.log)
@@ -91,6 +103,13 @@ match makes results depend on ordering. Individual suites:
 import('/tests/physics.test.js').then(m => console.table(m.run()))
 ```
 
+A full pass rebuilds the map once per suite, which can outrun a single console
+call. Run it in halves if needed:
+
+```js
+import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","gameplay"]))
+```
+
 | Suite | Covers |
 |---|---|
 | `physics` | jump arc, wall sweeps, ceiling clamp, crouch |
@@ -101,6 +120,7 @@ import('/tests/physics.test.js').then(m => console.table(m.run()))
 | `firing` | every weapon lands damage, ammo, movement penalty |
 | `bots` | nav graph, pathing, target acquisition, engagement, aim |
 | `rounds` | round setup, roles, pistol economy, plant zones, payouts |
+| `rules` | team-mate takeover, and each practice toggle on and off |
 
 ## Notes
 

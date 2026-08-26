@@ -5,7 +5,7 @@
 // bots, running the player into walls, forcing round phases -- so sharing one
 // match between them makes results depend on execution order rather than on
 // the code under test.
-const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds"];
+const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds","rules"];
 
 function freshMatch(){
   const e=window.engine;
@@ -48,9 +48,15 @@ function freshMatch(){
   });
 }
 
-export async function run(){
+/**
+ * @param {string[]} [only] subset of suite names; omit to run everything.
+ * A full pass rebuilds the map once per suite, which can exceed a single
+ * console call's time budget -- run halves if you hit that.
+ */
+export async function run(only){
+  const list=(only&&only.length)?SUITES.filter(s=>only.includes(s)):SUITES;
   const all=[];
-  for(const s of SUITES){
+  for(const s of list){
     await freshMatch();
     const m=await import(`/tests/${s}.test.js?t=${Date.now()}`);
     const fn=m.runChecks||m.run;
@@ -62,7 +68,7 @@ export async function run(){
     passed:all.length-fails.length,
     failed:fails.length,
     failures:fails.map(f=>`[${f.suite}] ${f.test} :: ${f.detail}`),
-    bySuite:SUITES.map(s=>{
+    bySuite:list.map(s=>{
       const rs=all.filter(r=>r.suite===s);
       return `${s}: ${rs.filter(r=>r.result==="PASS").length}/${rs.length}`;
     })

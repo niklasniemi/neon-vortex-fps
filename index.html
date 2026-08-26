@@ -28,6 +28,7 @@
     <div id="netchip" class="chip"><i id="netdot"></i><span id="nettxt">OFFLINE</span></div>
     <div id="fpschip" class="chip">-- FPS</div>
     <div id="coordchip" class="chip hidden">X +0.0 · Z +0.0</div>
+    <div id="practicechip" class="chip hidden">PRACTICE</div>
 
     <div id="objbar" class="hidden"></div>
     <div id="progwrap" class="hidden">
@@ -180,6 +181,7 @@
         <h2>SETTINGS</h2>
         <div class="stabs">
           <button class="stab on" data-tab="controls">CONTROLS</button>
+          <button class="stab" data-tab="rules">RULES</button>
           <button class="stab" data-tab="video">VIDEO</button>
           <button class="stab" data-tab="audio">AUDIO</button>
         </div>
@@ -195,6 +197,25 @@
             <button id="tg-invert" class="tgl"></button>
             <button id="tg-dmg" class="tgl"></button>
             <button id="tg-ff" class="tgl"></button>
+          </div>
+        </div>
+
+        <div class="spane" data-pane="rules">
+          <div class="field">
+            <label>Death</label>
+            <button id="tg-takeover" class="tgl wide"></button>
+            <small class="hint">When you are killed, take control of a surviving
+              team-mate for the rest of the round instead of spectating.</small>
+          </div>
+          <div class="field">
+            <label>Practice</label>
+            <div class="tglrow">
+              <button id="tg-infammo" class="tgl"></button>
+              <button id="tg-infnades" class="tgl"></button>
+              <button id="tg-infmoney" class="tgl"></button>
+            </div>
+            <small class="hint">Local only. In a match hosted by a friend the
+              host simulates you, so these have no effect there.</small>
           </div>
         </div>
 

@@ -2,6 +2,7 @@
 import {SETTINGS,ECONOMY} from '../core/config.js';
 import {UI,MATCH,engine} from '../core/globals.js';
 import {WEAPONS,NADE_DEFS,GEAR,defaultPistol} from './weapons.js';
+import {Cheats} from './cheats.js';
 
 /** Everything purchasable, keyed the way the buy menu addresses it. */
 export function priceOf(item,team){
@@ -50,7 +51,7 @@ export function buyBlocked(c,item){
     if(w.slot===3)return "N/A";                    // knife is never bought
     if(c.slots[0]&&c.slots[0].id===item)return "OWNED";
   }
-  if((c.money||0)<price)return "NO FUNDS";
+  if(!Cheats.money(c)&&(c.money||0)<price)return "NO FUNDS";
   return null;
 }
 
@@ -63,7 +64,7 @@ export function applyBuy(c,item){
   if(!c||!c.alive)return false;
   if(buyBlocked(c,item))return false;
   const price=priceOf(item,c.team);
-  c.money-=price;
+  if(!Cheats.money(c))c.money-=price;
 
   if(GEAR[item]){
     const g=GEAR[item];

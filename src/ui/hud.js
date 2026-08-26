@@ -7,6 +7,7 @@ import {WEAPONS,NADE_DEFS,NADE_ORDER} from '../game/weapons.js';
 import {MODES} from '../game/modes.js';
 import {ARENAS} from '../world/maps.js';
 import {NET2} from '../net/p2p.js';
+import {Cheats} from '../game/cheats.js';
 import {Menu} from './menu.js';
 import {BuyMenu} from './buymenu.js';
 
@@ -15,7 +16,7 @@ const $=id=>document.getElementById(id);
 export class UIManager{
 constructor(){
 this.el={};
-for(const id of["coordchip", "buywrap", "buygrid", "buymoney", "buytimer", "moneyhud", "nadebar", "flashfx", "xhair", "vig", "hud", "menu", "pause", "end", "loading", "loadtxt", "feed", "annmain", "annsub", "hpfill", "hpnum", "arfill", "arnum", "magnum", "resnum", "wname", "slots", "miniscores", "timerchip", "radar", "boardwrap", "board", "standings", "toast", "netchip", "netdot", "nettxt", "fpschip", "scope", "dmglayer", "endtitle", "endsub", "endtimer", "hitm", "objbar", "progwrap", "proglab", "progfill", "respawnmsg", "btn-resume", "btn-quit", "armicon", "helmicon", "defusericon", "buyhint"])this.el[id]=$(id);
+for(const id of["coordchip", "practicechip", "buywrap", "buygrid", "buymoney", "buytimer", "moneyhud", "nadebar", "flashfx", "xhair", "vig", "hud", "menu", "pause", "end", "loading", "loadtxt", "feed", "annmain", "annsub", "hpfill", "hpnum", "arfill", "arnum", "magnum", "resnum", "wname", "slots", "miniscores", "timerchip", "radar", "boardwrap", "board", "standings", "toast", "netchip", "netdot", "nettxt", "fpschip", "scope", "dmglayer", "endtitle", "endsub", "endtimer", "hitm", "objbar", "progwrap", "proglab", "progfill", "respawnmsg", "btn-resume", "btn-quit", "armicon", "helmicon", "defusericon", "buyhint"])this.el[id]=$(id);
 this.ctx=this.el.xhair.getContext("2d");
 this.rctx=this.el.radar.getContext("2d");
 this.slotsDirty=true;
@@ -358,8 +359,20 @@ if(this.el.armicon)this.el.armicon.classList.toggle("off",p.armour<=0);
 if(this.el.helmicon)this.el.helmicon.classList.toggle("off",!p.helmet);
 if(this.el.defusericon)this.el.defusericon.classList.toggle("off",!p.hasDefuser);
 const st=p.slotState(),cfg=p.currentCfg();
+const infAmmo=Cheats.ammo(p);
 this.el.magnum.textContent=st.reloading>0?"--":st.mag;
-this.el.resnum.textContent="/"+st.reserve;
+this.el.resnum.textContent=infAmmo?"/\u221E":"/"+st.reserve;
+if(this.el.practicechip){
+const on=Cheats.anyOn();
+this.el.practicechip.classList.toggle("hidden",!on);
+if(on){
+const bits=[];
+if(SETTINGS.infAmmo)bits.push("AMMO");
+if(SETTINGS.infNades)bits.push("NADES");
+if(SETTINGS.infMoney)bits.push("MONEY");
+this.el.practicechip.textContent="PRACTICE \u00B7 "+bits.join(" ");
+}
+}
 this.el.wname.textContent=cfg.name;
 if(this.slotsDirty){
 this.slotsDirty=false;

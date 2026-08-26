@@ -47,7 +47,14 @@ export const SETTINGS=Object.assign({
   vmSide:1,vmX:0,vmY:0,
   crossColor:"#4fe3ff",crossSize:1,crossDot:true,
   dmgNumbers:true,grain:true,ca:true,mmRotate:true,ff:false,
-  teamSize:5,side:"ct"
+  teamSize:5,side:"ct",
+
+  // --- optional rules ------------------------------------------------------
+  // Take control of a surviving team-mate instead of spectating out the round.
+  takeover:false,
+  // Practice cheats. Local only -- a P2P guest is simulated by the host, so
+  // these cannot take effect there.
+  infAmmo:false,infNades:false,infMoney:false
 },loadSettings());
 
 export function saveSettings(){try{localStorage.setItem("nv_settings",JSON.stringify(SETTINGS))}catch(e){}}

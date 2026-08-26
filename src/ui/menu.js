@@ -166,7 +166,11 @@ export const Menu={
     const toggles=[["tg-dmg","dmgNumbers","DAMAGE NUMBERS"],
                    ["tg-dot","crossDot","CROSSHAIR DOT"],
                    ["tg-ff","ff","FRIENDLY FIRE"],
-                   ["tg-invert","invert","INVERT PITCH"]];
+                   ["tg-invert","invert","INVERT PITCH"],
+                   ["tg-takeover","takeover","TAKE OVER A TEAM-MATE ON DEATH"],
+                   ["tg-infammo","infAmmo","UNLIMITED AMMO"],
+                   ["tg-infnades","infNades","UNLIMITED GRENADES"],
+                   ["tg-infmoney","infMoney","UNLIMITED MONEY"]];
     for(const [id,key,label] of toggles){
       const el=$(id);if(!el)continue;
       const paint=()=>{el.textContent=label+"  "+(SETTINGS[key]?"ON":"OFF");el.classList.toggle("on",!!SETTINGS[key])};

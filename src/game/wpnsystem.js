@@ -4,6 +4,7 @@ import {U,_va,_vb,_vc,_vd,_ve,_vf} from '../core/util.js';
 import {GFX,PHYS,AUDIO,FX,UI,MATCH,WORLD,engine} from '../core/globals.js';
 import {WEAPONS,NADE_DEFS} from './weapons.js';
 import {GrenadeProj} from '../entities/projectiles.js';
+import {Cheats} from './cheats.js';
 
 export const WPN={
 
@@ -56,7 +57,7 @@ fire(ent,ratio=1){
   if(st.cd>0||st.reloading>0||st.mag<=0)return false;
   if(!ent.isBot&&(ent.pendingSlot>=0||ent.switchAnim>.12))return false;
 
-  st.mag--;
+  if(!Cheats.ammo(ent))st.mag--;
   st.cd=cfg.fireRate;
   st.shotIdx=(st.shotIdx||0)+1;
 
@@ -95,7 +96,8 @@ botFire(ent,ratio){this.fire(ent,ratio)},
 throwNade(ent,type,dir,power){
   const def=NADE_DEFS[type];
   if(!def||ent.nades[type]<=0)return false;
-  ent.nades[type]--;ent.nadeCd=.8;
+  if(!Cheats.nades(ent))ent.nades[type]--;
+  ent.nadeCd=.8;
   const origin=ent.eyePos(new THREE.Vector3()).addScaledVector(dir,.4);
   engine.add(new GrenadeProj(ent,type,origin,dir,power));
   AUDIO.play("pin",{pos:origin,vol:.5});

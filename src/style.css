@@ -48,6 +48,8 @@ body{-webkit-font-smoothing:antialiased;user-select:none}
 #netdot.bad{background:var(--bad)}
 #fpschip{top:242px;left:14px}
 #coordchip{top:270px;left:14px}
+#practicechip{top:298px;left:14px;color:var(--warn);border-color:var(--amber-dim);
+  background:rgba(226,176,74,.12)}
 
 #hpwrap{position:absolute;left:22px;bottom:22px;min-width:230px}
 #vitals{display:flex;flex-direction:column;gap:4px}
@@ -199,6 +201,9 @@ input[type=range]{width:100%;accent-color:var(--amber);background:transparent}
 .tgl{flex:1 1 46%;background:rgba(255,255,255,.03);border:1px solid var(--panel-edge);color:var(--sand-dim);
   font-family:var(--font);font-size:11px;letter-spacing:.09em;padding:8px;border-radius:3px;cursor:pointer}
 .tgl.on{color:var(--amber);border-color:var(--amber-dim);background:rgba(226,176,74,.12)}
+.tgl.wide{flex:1 1 100%}
+.hint{display:block;font-size:10px;line-height:1.6;letter-spacing:.04em;
+  color:var(--sand-dim);opacity:.8;margin-top:2px}
 
 .stabs{display:flex;gap:5px;border-bottom:1px solid var(--panel-edge);padding-bottom:9px}
 .stab{background:none;border:none;color:var(--sand-dim);font-family:var(--font);font-size:12px;
