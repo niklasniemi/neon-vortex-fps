@@ -99,7 +99,10 @@ export function integrateKinematic(ent,dt){
     // Sample only ABOVE step height. The riser of a stair or the lip of a ramp
     // is a vertical face too, and treating it as a wall makes every step
     // unclimbable -- stepping over it is what CFG.stepMax is for.
-    for(const hh of[CFG.stepMax+.12,.85,1.15]){
+    // Two heights instead of three: a knee-high sample above step height and a
+    // chest-high one. The third added a third of the frame's raycasts for
+    // almost no extra coverage.
+    for(const hh of[CFG.stepMax+.12,1.05]){
       if(hh>h)break;
       _vf.set(p.x,p.y-CFG.feetOff+hh,p.z);
       const n=PHYS.rayWall(_vf,_vd,CFG.radius+travel+.05);
@@ -138,9 +141,10 @@ export function integrateKinematic(ent,dt){
   {
     const mdx=p.x-startX, mdz=p.z-startZ;
     const mdist=Math.hypot(mdx,mdz);
-    if(mdist>1e-4){
+    // Only worth confirming a step that actually went somewhere.
+    if(mdist>.006){
       _vd.set(mdx/mdist,0,mdz/mdist);
-      for(const hh of[CFG.stepMax+.12,1.0]){
+      for(const hh of[CFG.stepMax+.14]){
         if(hh>h)continue;
         _vf.set(startX,p.y-CFG.feetOff+hh,startZ);
         const n=PHYS.rayWall(_vf,_vd,mdist+.02);

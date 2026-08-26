@@ -5,11 +5,16 @@
 // bots, running the player into walls, forcing round phases -- so sharing one
 // match between them makes results depend on execution order rather than on
 // the code under test.
-const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds","rules"];
+const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds","roundflow","rules","radar","audio"];
 
 function freshMatch(){
   const e=window.engine;
   const N=window.NV.NET2;
+  const S=window.NV.SET;
+  // Practice rules persist in localStorage. A toggle the player left on would
+  // silently invalidate every ammo, grenade and economy assertion, so every
+  // suite starts from rules-off; the `rules` suite enables what it needs.
+  S.infAmmo=false;S.infNades=false;S.infMoney=false;S.takeover=false;
   // Reproduce what the DEPLOY button sets up: a full 5v5 against bots. Calling
   // engine.deploy() straight would inherit whatever lobby state was left over
   // and give the suites a 1v1 to work with.

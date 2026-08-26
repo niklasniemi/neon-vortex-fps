@@ -12,6 +12,9 @@ const check=(name,pass,detail)=>out.push({test:name,result:pass?"PASS":"FAIL",de
 export function run(){
   out.length=0;
   const e=window.engine, p=e.player, V=window.NV, M=V.MATCH, SF=V.WORLD.spans;
+  // Baseline is rules-off (the runner guarantees it); each block turns on only
+  // what it is testing.
+  SETTINGS.infAmmo=SETTINGS.infNades=SETTINGS.infMoney=false;
   const saved={takeover:SETTINGS.takeover,ammo:SETTINGS.infAmmo,
                nades:SETTINGS.infNades,money:SETTINGS.infMoney,
                phase:M.phase,round:M.mode.roundPhase};

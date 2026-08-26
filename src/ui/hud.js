@@ -8,15 +8,17 @@ import {MODES} from '../game/modes.js';
 import {ARENAS} from '../world/maps.js';
 import {NET2} from '../net/p2p.js';
 import {Cheats} from '../game/cheats.js';
+import {scan as intelScan, radarVisible} from '../game/intel.js';
 import {Menu} from './menu.js';
 import {BuyMenu} from './buymenu.js';
+import {Pause} from './pause.js';
 
 const $=id=>document.getElementById(id);
 
 export class UIManager{
 constructor(){
 this.el={};
-for(const id of["coordchip", "practicechip", "buywrap", "buygrid", "buymoney", "buytimer", "moneyhud", "nadebar", "flashfx", "xhair", "vig", "hud", "menu", "pause", "end", "loading", "loadtxt", "feed", "annmain", "annsub", "hpfill", "hpnum", "arfill", "arnum", "magnum", "resnum", "wname", "slots", "miniscores", "timerchip", "radar", "boardwrap", "board", "standings", "toast", "netchip", "netdot", "nettxt", "fpschip", "scope", "dmglayer", "endtitle", "endsub", "endtimer", "hitm", "objbar", "progwrap", "proglab", "progfill", "respawnmsg", "btn-resume", "btn-quit", "armicon", "helmicon", "defusericon", "buyhint"])this.el[id]=$(id);
+for(const id of["coordchip", "practicechip", "buywrap", "buygrid", "buymoney", "buytimer", "moneyhud", "nadebar", "flashfx", "xhair", "vig", "hud", "menu", "pause", "end", "loading", "loadtxt", "feed", "annmain", "annsub", "hpfill", "hpnum", "arfill", "arnum", "magnum", "resnum", "wname", "slots", "miniscores", "timerchip", "radar", "boardwrap", "board", "standings", "toast", "netchip", "netdot", "nettxt", "fpschip", "scope", "dmglayer", "endtitle", "endsub", "endtimer", "hitm", "objbar", "progwrap", "proglab", "progfill", "respawnmsg", "specbar", "specwho", "spechint", "btn-resume", "btn-quit", "armicon", "helmicon", "defusericon", "buyhint"])this.el[id]=$(id);
 this.ctx=this.el.xhair.getContext("2d");
 this.rctx=this.el.radar.getContext("2d");
 this.slotsDirty=true;
@@ -57,6 +59,18 @@ this.el.respawnmsg.textContent=t;
 this.el.respawnmsg.classList.remove("hidden");
 }
 respawnHide(){this.el.respawnmsg.classList.add("hidden")}
+
+/** Names whoever you are watching while dead. Pass null to clear. */
+specBar(target,count){
+const el=this.el.specbar;
+if(!el)return;
+if(!target){el.classList.add("hidden");return}
+el.classList.remove("hidden");
+const team=target.team===1?"CT":"T";
+this.el.specwho.innerHTML="SPECTATING <b>"+target.name+"</b> <span class='hp'>"+
+  team+" \u00B7 "+Math.max(0,Math.round(target.health))+" HP</span>";
+this.el.spechint.classList.toggle("hidden",count<2);
+}
 flashBlind(dur){
 const f=this.el.flashfx;
 f.style.transition="opacity .04s";
@@ -92,13 +106,13 @@ this.el.xsizeval&& (this.el.xsizeval.textContent=Math.round(SETTINGS.crossSize*1
 buyOpen=false;
 toggleBuy(force){BuyMenu.toggle(force)}
 bindMenu(){Menu.init()}
-bindPause(){
-this.el["btn-resume"].onclick=()=>{AUDIO.play("ui_click",{ui:true});engine.pause(false)};
-this.el["btn-quit"].onclick=()=>{AUDIO.play("ui_click",{ui:true});engine.quitToMenu()};
-}
+bindPause(){Pause.bind()}
 showMenu(b){this.el.menu.classList.toggle("hidden",!b);if(b&&Menu.bg)Menu.bg.start();else if(Menu.bg)Menu.bg.stop()}
 showHUD(b){this.el.hud.classList.toggle("hidden",!b);this.el.xhair.classList.toggle("hidden",!b)}
-pauseShow(b){this.el.pause.classList.toggle("hidden",!b)}
+pauseShow(b){
+this.el.pause.classList.toggle("hidden",!b);
+if(b)Pause.open();else Pause.close();
+}
 loading(b,txt){this.el.loading.classList.toggle("hidden",!b);if(txt)this.el.loadtxt.textContent=txt}
 loadtxt(t){this.loading(true,t)}
 scope(b){this.el.scope.classList.toggle("hidden",!b)}
@@ -278,9 +292,14 @@ g.beginPath();g.arc(c,c,c-2,0,7);g.clip();
 g.fillStyle="rgba(14,15,17,.82)";
 g.fillRect(0,0,S,S);
 const cy=SETTINGS.mmRotate?Math.cos(p.yaw):1,sy=SETTINGS.mmRotate?Math.sin(p.yaw):0;
+// Proper 2D rotation. The X row used +sin, making the matrix
+//   [[cos, sin],[sin, cos]]
+// whose determinant is cos(2*yaw) -- not a rotation at all. It sheared the map
+// as you turned and collapsed it flat at 45 degrees, which is the minimap
+// "spinning around the wrong axis". A rotation needs [[cos,-sin],[sin,cos]].
 const proj=(wx,wz)=>{
 const dx=wx-p.body.position.x,dz=wz-p.body.position.z;
-return[c+(dx*cy+dz*sy)*sc,c+(dx*sy+dz*cy)*sc];
+return[c+(dx*cy-dz*sy)*sc,c+(dx*sy+dz*cy)*sc];
 };
 // Floor plan, rasterised from the span field at load time. Drawn with the
 // same transform `proj` uses so the map and the blips stay in register.
@@ -288,7 +307,7 @@ const mm=WORLD.minimap;
 if(mm){
 g.save();
 g.imageSmoothingEnabled=true;
-g.setTransform(cy*sc,sy*sc,sy*sc,cy*sc,c,c);
+g.setTransform(cy*sc,sy*sc,-sy*sc,cy*sc,c,c);   // matches proj()
 g.globalAlpha=.85;
 g.drawImage(mm.canvas,mm.minX-p.body.position.x,mm.minZ-p.body.position.z,mm.w,mm.d);
 g.restore();
@@ -322,17 +341,31 @@ g.beginPath();g.arc(bx,by,4.5,0,7);g.fill();
 }else{g.fillStyle="#ffe14d";g.fillRect(bx-3,by-3,6,6)}
 }
 }
+// Refresh what the team can actually account for, then plot only that.
+intelScan(p.team);
 for(const e of engine.combatants){
 if(!e.alive||e===p||!e.bodyInWorld)continue;
+const vis=radarVisible(p,e);
+if(!vis.show)continue;
 const dx=e.body.position.x-p.body.position.x,dz=e.body.position.z-p.body.position.z;
 if(dx*dx+dz*dz>range*range)continue;
 const[x,y]=proj(e.body.position.x,e.body.position.z);
 const mate=MATCH.mode.teams&&e.team===p.team;
-g.fillStyle=mate?"#8fb3d9":"#cf4d46";
+if(mate){
+g.fillStyle="#8fb3d9";
 g.beginPath();g.arc(x,y,3,0,7);g.fill();
-if(e===MATCH.lastShooter&&engine.time-MATCH.lastShotT<.5&&!mate){
-g.strokeStyle="rgba(255,77,94,.8)";
-g.beginPath();g.arc(x,y,6+(engine.time-MATCH.lastShotT)*22,0,7);g.stroke();
+}else if(vis.fresh){
+// Confirmed contact.
+g.fillStyle="#cf4d46";
+g.beginPath();g.arc(x,y,3.2,0,7);g.fill();
+}else{
+// Last known position -- hollow, so you can tell it may be stale.
+g.strokeStyle="rgba(207,77,70,.85)";g.lineWidth=1.6;
+g.beginPath();g.arc(x,y,3.2,0,7);g.stroke();
+}
+if(!mate&&engine.time-(e.lastFireT||-999)<.45){
+g.strokeStyle="rgba(226,176,74,.75)";g.lineWidth=1.4;
+g.beginPath();g.arc(x,y,5+(engine.time-e.lastFireT)*26,0,7);g.stroke();
 }
 }
 g.restore();
@@ -402,7 +435,12 @@ this.fpsAcc+=dt;this.fpsN++;
 this.fpsT-=dt;
 if(this.fpsT<=0){
 this.fpsT=.5;
-this.el.fpschip.textContent=Math.round(this.fpsN/Math.max(.001,this.fpsAcc))+" FPS";
+const fps=Math.round(this.fpsN/Math.max(.001,this.fpsAcc));
+// Show the graphics tier alongside the rate, so it is clear when the renderer
+// has traded quality to hold the frame budget.
+const q=GFX&&GFX.quality&&GFX.quality.current?GFX.quality.current.name:null;
+this.el.fpschip.textContent=fps+" FPS"+(q?" \u00B7 "+q.toUpperCase():"");
+this.el.fpschip.style.color=fps<50?"#cf4d46":fps<58?"#d9a441":"";
 this.fpsAcc=0;this.fpsN=0;
 const p2=engine.player;
 if(p2&&p2.body){

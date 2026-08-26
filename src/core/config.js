@@ -42,11 +42,12 @@ export function loadSettings(){try{return JSON.parse(localStorage.getItem("nv_se
 
 export const SETTINGS=Object.assign({
   name:"OPERATOR-"+(100+Math.floor(Math.random()*899)),
-  sens:1,adsSens:.85,fov:80,vol:.8,invert:false,diff:"standard",
+  sens:.85,adsSens:.85,fov:80,vol:.8,invert:false,diff:"standard",
   shake:1,bob:1,bloomAmt:1,autoReload:true,
   vmSide:1,vmX:0,vmY:0,
   crossColor:"#4fe3ff",crossSize:1,crossDot:true,
   dmgNumbers:true,grain:true,ca:true,mmRotate:true,ff:false,
+  quality:"auto",   // auto | low | medium | high | ultra
   teamSize:5,side:"ct",
 
   // --- optional rules ------------------------------------------------------

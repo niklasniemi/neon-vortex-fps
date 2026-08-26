@@ -5,6 +5,7 @@ import {GFX,PHYS,AUDIO,FX,UI,MATCH,WORLD,engine} from '../core/globals.js';
 import {WEAPONS,NADE_DEFS} from './weapons.js';
 import {GrenadeProj} from '../entities/projectiles.js';
 import {Cheats} from './cheats.js';
+import {noteShot} from './intel.js';
 
 export const WPN={
 
@@ -71,6 +72,7 @@ fire(ent,ratio=1){
   const baseDir=this.aimDir(ent,new THREE.Vector3());
   const muzzle=this.muzzlePos(ent,new THREE.Vector3());
 
+  noteShot(ent,cfg);
   AUDIO.play(cfg.snd,{pos:muzzle,vol:cfg.silenced?.55:.9});
   if(!cfg.silenced)FX.lightClaim(muzzle,cfg.tracerColor,2.2,10);
   FX.flash(muzzle,cfg.tracerColor,cfg.silenced?.45:.9);

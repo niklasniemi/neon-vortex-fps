@@ -2,6 +2,7 @@
 import {CFG,GRP} from '../core/config.js';
 import {U,_va,_vb,_vc,_vd,_ve,_vf} from '../core/util.js';
 import {WORLD,GFX,FX,AUDIO,engine} from '../core/globals.js';
+import {Broadphase} from './broadphase.js';
 
 export class PhysicsController{
   constructor(){
@@ -13,6 +14,9 @@ export class PhysicsController{
     this.raycaster=new THREE.Raycaster();
     this.colliders=[];
     this.removeQueue=[];
+    this.bp=new Broadphase();
+    // Reused so the hot path allocates nothing -- see _rayTargets.
+    this._targets=[];
   }
 
   setGravity(g){this.world.gravity.set(0,g,0)}
@@ -76,8 +80,17 @@ export class PhysicsController{
     FX.explosion(pos,radius,color||0xd08840);
   }
 
-  _rayTargets(ignoreComb){
-    const list=this.colliders.slice();
+  /**
+   * Candidate meshes for a combat ray: nearby world geometry plus every live
+   * hitbox. Writes into a reused array -- this used to copy all 419 colliders
+   * on every call, which is a lot of garbage for something invoked per bullet
+   * and per line-of-sight check.
+   */
+  _rayTargets(ignoreComb,origin,dir,range){
+    const list=this._targets;
+    list.length=0;
+    const world=(this.bp.cells.size&&origin)?this.bp.query(origin,dir,range):this.colliders;
+    for(let i=0;i<world.length;i++)list.push(world[i]);
     for(const c of engine.combatants){
       if(!c.alive||!c.hitTorso||c===ignoreComb)continue;
       list.push(c.hitTorso,c.hitHead);
@@ -88,7 +101,7 @@ export class PhysicsController{
   combatRay(origin,dir,range,ignoreComb,pierce){
     this.raycaster.set(origin,dir);
     this.raycaster.far=range;
-    const hits=this.raycaster.intersectObjects(this._rayTargets(ignoreComb),false);
+    const hits=this.raycaster.intersectObjects(this._rayTargets(ignoreComb,origin,dir,range),false);
     const out={chars:[],wall:null};
     for(const h of hits){
       const nrm=h.face?h.face.normal.clone().transformDirection(h.object.matrixWorld):new THREE.Vector3(0,1,0);
@@ -105,10 +118,14 @@ export class PhysicsController{
   }
 
   /** Nearest near-vertical surface ahead. Returns its normal, or null. */
+  /** Rebuilds the raycast index. Call once after the map is built. */
+  indexColliders(){this.bp.build(this.colliders)}
+
   rayWall(origin,dir,len){
     this.raycaster.set(origin,dir);
     this.raycaster.far=len;
-    const hits=this.raycaster.intersectObjects(this.colliders,false);
+    const list=this.bp.cells.size?this.bp.query(origin,dir,len):this.colliders;
+    const hits=this.raycaster.intersectObjects(list,false);
     for(const h of hits){
       const n=h.face?h.face.normal.clone().transformDirection(h.object.matrixWorld):null;
       if(n&&Math.abs(n.y)>.55)continue;      // floor or ceiling, not a wall

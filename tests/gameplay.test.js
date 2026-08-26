@@ -2,7 +2,7 @@
 //   import('/tests/gameplay.test.js').then(m=>console.table(m.run()))
 import {armourSplit,WEAPONS} from '/src/game/weapons.js';
 import {applyBuy,buyBlocked} from '/src/game/economy.js';
-import {REGEN,ECONOMY} from '/src/core/config.js';
+import {REGEN,ECONOMY,SETTINGS} from '/src/core/config.js';
 
 const out=[];
 const check=(name,pass,detail)=>out.push({test:name,result:pass?"PASS":"FAIL",detail});
@@ -13,6 +13,10 @@ export function run(){
   // Buying and regeneration both require a live player; make that explicit so
   // the suite does not depend on what ran before it.
   p.alive=true; p.health=100; p.protectT=0;
+  // Practice rules persist in localStorage, so a toggle left on from a previous
+  // session would quietly invalidate every economy assertion below.
+  const cheats={a:SETTINGS.infAmmo,n:SETTINGS.infNades,m:SETTINGS.infMoney};
+  SETTINGS.infAmmo=SETTINGS.infNades=SETTINGS.infMoney=false;
   const save={phase:m.roundPhase,buyT:m.buyT,mbuyT:M.buyT,money:p.money,armour:p.armour,
               helmet:p.helmet,left:p.leftSpawn,hurt:p.hurtT,pos:p.body.position.clone()};
 
@@ -134,6 +138,7 @@ export function run(){
   }
 
   // restore
+  SETTINGS.infAmmo=cheats.a;SETTINGS.infNades=cheats.n;SETTINGS.infMoney=cheats.m;
   m.roundPhase=save.phase; m.buyT=save.buyT; M.buyT=save.mbuyT;
   p.money=save.money; p.armour=save.armour; p.helmet=save.helmet;
   p.leftSpawn=save.left; p.hurtT=save.hurt; p.health=100;

@@ -29,9 +29,11 @@ no-cache headers so edits show up on reload.
 | `B` | Buy menu |
 | `E` (hold) | Plant / defuse |
 | `Tab` | Scoreboard |
-| `Esc` | Pause |
+| `Esc` | Pause / step back one level |
 
-Optional rules live under Settings → Rules.
+Menus take the arrow keys, with Enter or Space to activate and Escape to go back.
+Escape never quits a match on its own -- abandoning always goes through a
+confirmation. Optional rules live under Settings → Rules.
 
 ## What's in it
 
@@ -39,7 +41,25 @@ Optional rules live under Settings → Rules.
 teleporters, lava and floating pickups are gone.
 
 **Radar.** A floor plan rasterised from the collision field at load time, with walls,
-elevation shading, bombsite labels and live blips. It rotates with you.
+elevation shading and bombsite labels. It rotates with you. Enemies are not simply
+drawn wherever they are -- they appear only when your team has line of sight, or
+briefly after they fire (less briefly if the weapon is suppressed). A contact that
+breaks line of sight fades to a hollow "last known" marker before dropping off.
+
+**Spectating.** Killed with team-mates still alive, you follow them in third person
+and cycle with A/D, the arrow keys, Space or the scroll wheel. (With the takeover
+rule on you drop into a survivor instead -- see Optional rules.)
+
+**Audio.** Fully synthesised: a procedural convolution reverb, HRTF panning,
+distance-based air absorption, pink and brown noise, and per-shot pitch and timbre
+jitter so repeated gunfire never loops. Each weapon is layered from a transient
+crack, a muzzle-blast body and a room tail. There is a procedural score for the
+menu and a tension cue while the bomb is ticking.
+
+**Performance.** Raycasts go through a uniform-grid broadphase rather than testing
+every collider, and the renderer walks a quality ladder (resolution, shadow map,
+bloom) to hold 60 fps. Settings -> Video lets you lock a tier; the FPS chip shows
+which one is active.
 
 **Counter-Strike weapon model.** AK-47, M4A1-S, AWP, MP9, Nova, Desert Eagle,
 Glock-18, USP-S and a knife, with CS damage, armour penetration and fire rates
@@ -90,7 +110,7 @@ exactly, so modules can reference each other without circular-import problems.
 
 ## Tests
 
-136 checks across nine suites, run from the browser console after starting a match:
+165 checks across twelve suites, run from the browser console after starting a match:
 
 ```js
 import('/tests/all.js').then(m => m.run()).then(console.log)
@@ -107,7 +127,14 @@ A full pass rebuilds the map once per suite, which can outrun a single console
 call. Run it in halves if needed:
 
 ```js
-import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","gameplay"]))
+import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","gameplay","audio"]))
+import('/tests/all.js').then(m => m.run(["firing","bots","rounds","roundflow","rules","radar"]))
+```
+
+There is also a profiler for frame cost:
+
+```js
+import('/tests/perf.test.js').then(m => console.log(m.run()))
 ```
 
 | Suite | Covers |
@@ -121,6 +148,9 @@ import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","game
 | `bots` | nav graph, pathing, target acquisition, engagement, aim |
 | `rounds` | round setup, roles, pistol economy, plant zones, payouts |
 | `rules` | team-mate takeover, and each practice toggle on and off |
+| `roundflow` | rounds two onward start with a full clock and do not end early |
+| `radar` | rotation geometry, and what the radar is allowed to reveal |
+| `audio` | every sound the game plays exists and is well formed |
 
 ## Notes
 

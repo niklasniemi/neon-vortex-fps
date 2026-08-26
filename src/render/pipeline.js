@@ -4,6 +4,7 @@
 import {CFG,SETTINGS} from '../core/config.js';
 import {U,_va,_vb,_vc} from '../core/util.js';
 import {WORLD,UI,engine} from '../core/globals.js';
+import {AdaptiveQuality} from './adaptive.js';
 
 export const FinalShader={
 uniforms:{tDiffuse:{value:null},uCA:{value:.25},uVig:{value:.62},uHurt:{value:0},uGrain:{value:1},uTint:{value:new THREE.Vector3(1,1,1)},uTintAmt:{value:.35},uTime:{value:0}},
@@ -32,7 +33,7 @@ fragmentShader:[
 export class GraphicsPipeline{
 constructor(container){
 this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:"high-performance"});
-const pr=Math.min(devicePixelRatio||1,1.75);
+const pr=Math.min(devicePixelRatio||1,1.25);
 this.renderer.setPixelRatio(pr);
 this.renderer.setSize(innerWidth,innerHeight);
 this.renderer.shadowMap.enabled=true;
@@ -53,6 +54,7 @@ this.vmScene.add(new THREE.HemisphereLight(0xffffff,0x3a4a5a,1.15));
 const vmD=new THREE.DirectionalLight(0xfff4e0,.9);vmD.position.set(.6,1,.4);this.vmScene.add(vmD);
 this.trauma=0;
 this.fovCur=SETTINGS.fov;
+this.quality=new AdaptiveQuality(this);
 this.hasComposer=!!(THREE.EffectComposer&&THREE.RenderPass&&THREE.ShaderPass&&THREE.UnrealBloomPass);
 if(this.hasComposer){
 this.composer=new THREE.EffectComposer(this.renderer);
@@ -92,7 +94,7 @@ rig.add(new THREE.AmbientLight(0xffffff,cfg.ambLight||0));
 const sun=new THREE.DirectionalLight(cfg.sun.c,cfg.sun.i);
 sun.position.set(...cfg.sun.p);
 sun.castShadow=true;
-sun.shadow.mapSize.set(3072,3072);
+sun.shadow.mapSize.set(2048,2048);
 sun.shadow.radius=2.2;
 const ext=Math.max(bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ)*.75+6;
 const c=sun.shadow.camera;
@@ -100,6 +102,7 @@ c.left=-ext;c.right=ext;c.top=ext;c.bottom=-ext;c.near=2;c.far=140;
 sun.shadow.bias=-.0004;sun.shadow.normalBias=.02;
 sun.target.position.set(0,0,0);
 rig.add(sun,sun.target);
+this.sun=sun;
 this.lightRig=rig;this.scene.add(rig);
 // Sky dome: a vertical gradient from hazy horizon to deep zenith. Cheap,
 // and it stops the background reading as a flat fill colour.
@@ -167,6 +170,8 @@ if(Math.abs(this.camera.fov-this.fovCur)>.02){this.camera.fov=this.fovCur;this.c
 this.trauma=Math.max(0,this.trauma-dt*1.35);
 }
 render(dt){
+// Hold the frame budget by trading resolution, shadows and bloom.
+if(this.quality&&dt>0)this.quality.tick(dt);
 this.vmCam.fov=this.camera.fov;this.vmCam.aspect=this.camera.aspect;
 this.vmCam.updateProjectionMatrix();
 this.final.uniforms.uTime.value+=dt;

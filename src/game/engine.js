@@ -92,6 +92,7 @@ placeProps(b,def,spans);
 PHYS.colliders.length=0;
 for(const cm of b.colliders)PHYS.colliders.push(cm);
 
+PHYS.indexColliders();
 UI.loading(true,"BUILDING NAVIGATION");
 await new Promise(r=>setTimeout(r,0));
 buildAutoNav(b,def,spans);
@@ -154,6 +155,7 @@ if(MATCH.mode.roundBased)MATCH.mode.startRound(MATCH);
 }
 UI.refreshSlots(this.player.slots.length);
 AUDIO.ambient(def.amb);
+AUDIO.music(null);          // the map has its own ambience
 this.state="playing";
 this.paused=false;
 UI.loading(false);
@@ -184,6 +186,8 @@ UI.scope(false);
 UI.critVig(false);
 UI.powShow(false);
 UI.showMenu(true);
+AUDIO.stopAmbient();
+AUDIO.music("menu");
 INPUT.unlock();
 document.body.style.cursor="";
 }

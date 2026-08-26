@@ -6,10 +6,11 @@
 // and each step only shows what that step needs.
 import {SETTINGS,saveSettings,DIFFS,TEAM_NAME} from '../core/config.js';
 import {U} from '../core/util.js';
-import {AUDIO,UI,engine} from '../core/globals.js';
+import {AUDIO,GFX,UI,engine} from '../core/globals.js';
 import {ARENAS,DEFAULT_MAP} from '../world/maps.js';
 import {NET2} from '../net/p2p.js';
 import {MenuBackground} from './background.js';
+import {Nav} from './nav.js';
 
 const $=id=>document.getElementById(id);
 
@@ -20,6 +21,17 @@ export const Menu={
   init(){
     const cv=$("menubg");
     if(cv){this.bg=new MenuBackground(cv);this.bg.start()}
+    // Audio needs a gesture before it will start; kick the score off on the
+    // first interaction of any kind.
+    const startMusic=()=>{
+      if(!AUDIO)return;
+      AUDIO.init();AUDIO.resume();
+      if(engine.state==="menu")AUDIO.music("menu");
+      removeEventListener("pointerdown",startMusic);
+      removeEventListener("keydown",startMusic);
+    };
+    addEventListener("pointerdown",startMusic);
+    addEventListener("keydown",startMusic);
     this.bindAll();
     this.go("root",true);
   },
@@ -47,6 +59,22 @@ export const Menu={
     if(back)back.classList.toggle("hidden",this.stack.length<=1);
     if(cur==="lobby")Lobby.render();
     if(cur==="settings")this.syncSettings();
+
+    // Point keyboard navigation at the visible screen. Escape steps back one
+    // level, which is also the only reliable way out of a settings panel that
+    // is taller than the window.
+    const panel=document.querySelector('.mscreen[data-screen="'+cur+'"]');
+    if(panel)Nav.attach(panel,()=>{if(this.stack.length>1)this.back()});
+    else Nav.detach();
+    const shell=document.querySelector(".menushell");
+    if(shell)shell.scrollTop=0;
+  },
+
+  /** Key handling while the main menu is on screen. */
+  handleKey(e){
+    if(engine.state!=="menu")return false;
+    if(e.code==="Escape"&&this.stack.length>1){this.back();return true}
+    return Nav.handleKey(e);
   },
 
   // --- binding ------------------------------------------------------------
@@ -162,6 +190,17 @@ export const Menu={
     if(col){col.value=SETTINGS.crossColor;col.oninput=()=>{SETTINGS.crossColor=col.value;saveSettings()}}
 
     this.seg("sel-hand",[[1,"RIGHT"],[-1,"LEFT"]],()=>SETTINGS.vmSide,v=>{SETTINGS.vmSide=+v;saveSettings()});
+
+    this.seg("sel-quality",
+      [["auto","AUTO"],["low","LOW"],["medium","MED"],["high","HIGH"],["ultra","ULTRA"]],
+      ()=>SETTINGS.quality,
+      v=>{
+        SETTINGS.quality=v;saveSettings();
+        if(GFX&&GFX.quality){
+          if(v==="auto")GFX.quality.unlock();
+          else GFX.quality.lock(v);
+        }
+      });
 
     const toggles=[["tg-dmg","dmgNumbers","DAMAGE NUMBERS"],
                    ["tg-dot","crossDot","CROSSHAIR DOT"],

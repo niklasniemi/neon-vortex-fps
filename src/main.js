@@ -15,6 +15,8 @@ import {BotManager} from './entities/botmanager.js';
 import {NetworkManager} from './net/netentities.js';
 import {NET2} from './net/p2p.js';
 import {UIManager} from './ui/hud.js';
+import {Menu} from './ui/menu.js';
+import {Pause} from './ui/pause.js';
 import {ARENAS} from './world/maps.js';
 import {groundYAt} from './world/arena.js';
 
@@ -43,6 +45,10 @@ function boot(){
     G.setNET(new NetworkManager());
     G.setEngine(new GameEngine());
 
+    // Honour a locked graphics tier from a previous session.
+    if(SETTINGS.quality&&SETTINGS.quality!=="auto"&&G.GFX.quality)
+      G.GFX.quality.lock(SETTINGS.quality);
+
     // Host mirrors its own HUD events to the guest so both see the same feed.
     const UI=G.UI;
     const mirror=(fn,wrap)=>{
@@ -64,6 +70,7 @@ function boot(){
       get MATCH(){return G.MATCH}, get WORLD(){return G.WORLD}, get UI(){return G.UI},
       get BOTMAN(){return G.BOTMAN}, get GFX(){return G.GFX}, get PHYS(){return G.PHYS},
       get FX(){return G.FX}, get WPN(){return G.WPN}, get INPUT(){return G.INPUT},
+      get AUDIO(){return G.AUDIO}, get NET(){return G.NET},
       get SET(){return SETTINGS}, get DIFFS(){return DIFFS}, get NET2(){return NET2},
       get ARENAS(){return ARENAS}, get combatants(){return G.engine.combatants},
       groundYAt
@@ -76,7 +83,16 @@ function boot(){
       const eng=G.engine, UI=G.UI;
       if(e.code==="Escape"&&UI&&UI.buyOpen){UI.toggleBuy(false);return}
       if(e.code==="Tab"&&eng.state==="playing"){e.preventDefault();UI.scoreboard(true)}
-      if(e.code==="Escape"&&eng.state==="playing"&&eng.paused)eng.quitToMenu();
+
+      // Menus own the keyboard while they are up. Note there is deliberately no
+      // "Escape twice quits" path any more -- abandoning a match always goes
+      // through the confirmation on the pause screen.
+      if(eng.state==="playing"&&eng.paused){
+        if(Pause.handleKey(e)){e.preventDefault();return}
+        if(e.code==="Escape"){e.preventDefault();eng.pause(false);return}
+        return;
+      }
+      if(eng.state==="menu"&&Menu.handleKey(e)){e.preventDefault();return}
     });
     addEventListener("keyup",e=>{if(e.code==="Tab")G.UI.scoreboard(false)});
 

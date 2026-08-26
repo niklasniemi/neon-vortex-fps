@@ -36,6 +36,10 @@
       <div class="bar"><div id="progfill" class="fill"></div></div>
     </div>
     <div id="respawnmsg" class="hidden"></div>
+    <div id="specbar" class="hidden">
+      <div id="specwho"></div>
+      <div id="spechint">&#9664; A / &#9654; D &nbsp;·&nbsp; SPACE OR SCROLL TO CYCLE</div>
+    </div>
     <div id="feed"></div>
     <div id="announce"><div id="annmain"></div><div id="annsub"></div></div>
 
@@ -220,6 +224,12 @@
         </div>
 
         <div class="spane" data-pane="video">
+          <div class="field">
+            <label>Graphics Quality</label>
+            <div id="sel-quality" class="seg"></div>
+            <small class="hint">Auto holds 60&nbsp;fps by trading resolution,
+              shadows and bloom. Pick a level to lock it.</small>
+          </div>
           <div class="field"><label>Field of View <b id="fovval"></b></label><input type="range" id="rng-fov" min="60" max="110"></div>
           <div class="field"><label>Screen Shake <b id="shakeval"></b></label><input type="range" id="rng-shake" min="0" max="200"></div>
           <div class="field"><label>Head Bob <b id="bobval"></b></label><input type="range" id="rng-bob" min="0" max="200"></div>
@@ -240,10 +250,31 @@
 
   <!-- ================= OVERLAYS ================= -->
   <div id="pause" class="screen hidden">
-    <div class="panel pcol">
+    <div class="panel pcol" id="pausepanel">
       <div class="phead">PAUSED</div>
-      <button id="btn-resume" class="btn primary">RESUME</button>
-      <button id="btn-quit" class="btn">ABANDON MATCH</button>
+
+      <div id="pausemain">
+        <button id="btn-resume" class="btn primary">RESUME</button>
+        <button id="btn-pausesettings" class="btn">SETTINGS</button>
+        <button id="btn-quit" class="btn danger">ABANDON MATCH</button>
+        <div class="pausehint">ESC RESUMES &nbsp;·&nbsp; ARROWS + ENTER TO NAVIGATE</div>
+      </div>
+
+      <!-- The settings panel is MOVED here while open, so there is exactly one
+           copy of every control and one set of bindings. -->
+      <div id="pausesettings" class="hidden">
+        <div id="pausesettingsslot"></div>
+        <button id="btn-settingsback" class="btn">BACK</button>
+      </div>
+
+      <div id="pauseconfirm" class="hidden">
+        <div class="confirmq">Abandon this match?</div>
+        <div class="confirmsub">Your progress in the current match will be lost.</div>
+        <div class="confirmrow">
+          <button id="btn-confirmno" class="btn">CANCEL &nbsp;<kbd>ESC</kbd></button>
+          <button id="btn-confirmyes" class="btn danger">ABANDON &nbsp;<kbd>ENTER</kbd></button>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -18,6 +18,7 @@ roundsToWin:8,roundTime:115,bombTime:40,plantTime:3.2,defuseTime:5,respawn:0,rou
 freezeTime:15,buyTime:20,
 init(m){
 m.scores={t1:0,t2:0};m.round=0;m.roundPhase="freeze";m.phaseT=this.freezeTime;m._lastN=99;
+m.roundT=this.roundTime;m.buyT=this.buyTime;
 m.bombState="idle";m.bombPos=null;m.carrier=null;
 m.plantProg=0;m.defuseProg=0;m.bombT=0;m.beepT=0;m.siteName="";m.sitePlan="A";
 m._lastN=99;m._bombMesh=null;m._led=null;
@@ -25,6 +26,11 @@ m._lastN=99;m._bombMesh=null;m._led=null;
 startRound(m){
 m.round++;
 m.roundPhase="freeze";m.phaseT=this.freezeTime;m._lastN=99;m.buyT=this.buyTime;
+// The round clock MUST be reset here. roundTick only initialised it when it was
+// undefined, so from round two onward it still held round one's expired value
+// and the round ended the instant it went live -- always as a CT win on
+// "TIME EXPIRED".
+m.roundT=this.roundTime;
 m.bombState="carried";m.plantProg=0;m.defuseProg=0;m.siteName="";
 m.respawnQ.length=0;
 UI.progHide();
@@ -82,7 +88,7 @@ if(ctIdx===1){c.objRole="roam";c.objSite="MID"}
 else{c.objSite=ctIdx%2?"A":"B";c.objRole="hold"+c.objSite}
 }
 c.objPoint=this.rolePoint(m,c);
-c.rotateAt=m.roundTime-45;
+c.rotateAt=this.roundTime-45;   // m is the controller, not the mode
 }
 const youT=engine.player.team===2;
 const sA=WORLD.def.sites.find(s=>s.name==="A"),sB=WORLD.def.sites.find(s=>s.name==="B");
@@ -184,6 +190,7 @@ this.endRound(m,"t1","BOMB DEFUSED"+(c===engine.player?" BY "+c.name:""));
 },
 endRound(m,winner,label){
 if(m.roundPhase==="post"||m.endPending)return;
+if(m._tenseMusic){m._tenseMusic=false;AUDIO.music(null)}
 m.roundPhase="post";m.phaseT=4.5;
 m.scores[winner]=(m.scores[winner]||0)+1;
 // CS economy: winners take a flat payout, losers take an escalating bonus
@@ -252,6 +259,7 @@ if(m._led)m._led.material.opacity=1;
 if(m._led)m._led.material.opacity=.25+Math.abs(Math.sin(engine.time*10));
 if(m._bombMesh)m._bombMesh.rotation.y+=dt*2;
 UI.objShow("\u25C6 BOMB PLANTED \u00B7 SITE "+m.siteName+" \u00B7 "+Math.ceil(m.bombT)+"s",true);
+if(!m._tenseMusic){m._tenseMusic=true;AUDIO.music("tension")}
 if(m.bombT<=0){this.explodeBomb(m);return}
 }else{
 m.roundT=(m.roundT===undefined?this.roundTime:m.roundT)-dt;

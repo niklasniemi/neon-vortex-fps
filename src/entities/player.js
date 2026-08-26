@@ -27,10 +27,13 @@ GFX.vmScene.add(this.vmRoot);
 this.vms={};
 this.swayX=0;this.swayY=0;
 this.deathOrbit=0;this.killerRef=null;this.takeoverT=-1;
+this.specTarget=null;this.specYaw=undefined;
 this.beatT=0;this.stepSurf="metal";
 this.makeHitMeshes();
 }
 onSpawned(){
+this.specTarget=null;this.specYaw=undefined;
+if(UI)UI.specBar(null,0);
 this.pitch=0;this.recoil.p=this.recoil.y=this.recoil.vp=this.recoil.vy=0;
 this.chargeT=-1;this.killerRef=null;
 UI.powShow(false);
@@ -113,7 +116,7 @@ this.ctrl.jumpConsume=true;
 if(INPUT.press("Space")){this.ctrl.jump=true;}
 else this.ctrl.jump=false;
 const m=INPUT.consumeMouse();
-const sens=.0021*SETTINGS.sens*U.lerp(1,SETTINGS.adsSens,this.adsAmt);
+const sens=.0011*SETTINGS.sens*U.lerp(1,SETTINGS.adsSens,this.adsAmt);
 this.yaw-=m.dx*sens;
 this.pitch-=m.dy*sens*(SETTINGS.invert?-1:1);
 this.pitch=U.clamp(this.pitch,-1.55,1.55);
@@ -395,11 +398,65 @@ AUDIO.play("spawn",{pos:this.body.position,vol:.5,force:true});
 return true;
 }
 
+// ---------------------------------------------------------------------------
+// Spectating
+// ---------------------------------------------------------------------------
+
+/** Who you can watch: living team-mates first, then anyone still alive. */
+specCandidates(){
+const mine=engine.combatants.filter(c=>c.alive&&c.body&&c!==this&&c.team===this.team);
+if(mine.length)return mine;
+return engine.combatants.filter(c=>c.alive&&c.body&&c!==this);
+}
+
+/** Steps to the next/previous living player. */
+cycleSpec(dir){
+const list=this.specCandidates();
+if(!list.length){this.specTarget=null;return}
+const i=list.indexOf(this.specTarget);
+const n=list.length;
+this.specTarget=list[((i<0?0:i+dir)%n+n)%n];
+AUDIO.play("ui_click",{ui:true});
+}
+
 updateDeathCam(dt){
+// Drop the target if they died or left; fall back to your own body.
+if(this.specTarget&&(!this.specTarget.alive||!this.specTarget.body))this.specTarget=null;
+if(!this.specTarget)this.specTarget=this.specCandidates()[0]||null;
+
+if(INPUT.press("ArrowRight")||INPUT.press("KeyD")||INPUT.press("Space"))this.cycleSpec(1);
+if(INPUT.press("ArrowLeft")||INPUT.press("KeyA"))this.cycleSpec(-1);
+const w=INPUT.takeWheel();
+if(w)this.cycleSpec(w>0?1:-1);
+
+const t=this.specTarget;
+if(t){
+// Chase camera: behind and above the shoulder, easing so it does not snap
+// every time they turn.
+const tp=t.body.position;
+const yaw=t.visYaw!==undefined?t.visYaw:t.yaw;
+this.specYaw=this.specYaw===undefined?yaw:U.angLerp(this.specYaw,yaw,U.clamp(dt*4,0,1));
+const back=2.9, up=1.35;
+const wanted=_va.set(
+  tp.x+Math.sin(this.specYaw)*back,
+  tp.y+up,
+  tp.z+Math.cos(this.specYaw)*back);
+// Do not let the camera sit inside a wall.
+if(WORLD&&WORLD.spans){
+const s=WORLD.spans.spanAt(wanted.x,wanted.z,wanted.y-1.2,1.5);
+if(!s)wanted.set(tp.x,tp.y+2.4,tp.z+.01);
+}
+GFX.camera.position.lerp(wanted,U.clamp(dt*7,0,1));
+GFX.camera.lookAt(tp.x,tp.y+.55,tp.z);
+UI.specBar(t,this.specCandidates().length);
+}else{
+// Nobody left to watch -- orbit where you fell.
 this.deathOrbit+=dt*.7;
 const p=this.body.position;
 const focus=this.killerRef&&this.killerRef.body?_vb.copy(this.killerRef.body.position):_vb.copy(p);
 GFX.camera.position.set(p.x+Math.cos(this.deathOrbit)*3.4,p.y+2.6,p.z+Math.sin(this.deathOrbit)*3.4);
 GFX.camera.lookAt(focus.x,focus.y+.8,focus.z);
+UI.specBar(null,0);
+}
 }
 }
