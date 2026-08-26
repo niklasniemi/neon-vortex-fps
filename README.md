@@ -24,8 +24,8 @@ no-cache headers so edits show up on reload.
 | `Ctrl` / `C` | Crouch |
 | `LMB` / `RMB` | Fire / aim |
 | `R` | Reload |
-| `1` `2` `3` | Primary · pistol · knife |
-| `G` | Cycle grenades |
+| `1` `2` `3`… | Weapon slots |
+| `G` | Grenades on / off (wheel selects) |
 | `B` | Buy menu |
 | `E` (hold) | Plant / defuse |
 | `Tab` | Scoreboard |
@@ -37,7 +37,7 @@ confirmation. Optional rules live under Settings → Rules.
 
 ## What's in it
 
-**One map, one mode.** Dust II, bomb defusal, MR15. The arcade arenas, jump pads,
+**One map, one mode.** Dust II, bomb defusal, MR15, from 1v1 up to 10v10. The arcade arenas, jump pads,
 teleporters, lava and floating pickups are gone.
 
 **Radar.** A floor plan rasterised from the collision field at load time, with walls,
@@ -72,8 +72,24 @@ and gear lost on death.
 **Buy window.** 15s freeze, 20s buy timer, and after that you can still buy from your
 own spawn *provided you have not moved yet* — stepping out latches the shop shut.
 
-**Bots with orders.** Per-round objectives over an auto-generated nav graph: Ts escort
-the carrier and plant, flankers rotate, CTs split the sites with a mid roamer.
+**Bots with orders.** Per-round objectives over an auto-generated nav graph.
+Terrorists escort the carrier and plant, with a quarter going wide. Counter-
+terrorists split across A, B and mid, rotate onto a spotted carrier, and every
+one of them converges on the bomb the moment it is planted — to contest the
+site or defuse it.
+
+Navigation is built on one definition of walkability, shared by the navmesh, the
+runtime graph and the bots themselves. Routes go around obstacles rather than
+into them, and a bot with somewhere to be never simply stands still.
+
+**Weapons.** AK-47, M4A1-S, FAMAS, AUG, AWP, Negev, MP9, MP5-SD, Nova, Desert
+Eagle, R8 Revolver, Glock-18, USP-S and a knife. Enable *Experimental weapons*
+for the sandbox tier: a Gauss rifle that shoots through people, a gravity
+projector that throws them, and a bounce cannon whose rounds ricochet off walls.
+
+**Grenades.** `G` puts your utility in hand and keeps it there — the wheel picks
+between what you are carrying, and `G` goes back to your gun. It no longer costs
+a press per grenade type and a press after every throw.
 
 **Optional rules** (Settings → Rules).
 *Take over a team-mate on death* — when you are killed with team-mates still
@@ -81,6 +97,9 @@ alive, you drop into a random survivor for the rest of the round instead of
 spectating. It is not a free respawn: you inherit that operator's position,
 health, armour, weapon, magazine, grenades and money, and they leave the board,
 so your side is exactly as strong as your death left it.
+*Carry every weapon you buy* — each purchase gets its own slot instead of
+replacing your primary.
+*Experimental weapons* — adds the sandbox tier to the buy menu.
 *Unlimited ammo / grenades / money* — practice toggles. Local only: a P2P guest
 is simulated by the host, so they cannot take effect there, and they never apply
 to bots. A HUD badge shows which are active.
@@ -110,7 +129,7 @@ exactly, so modules can reference each other without circular-import problems.
 
 ## Tests
 
-165 checks across twelve suites, run from the browser console after starting a match:
+191 checks across eleven suites, run from the browser console after starting a match:
 
 ```js
 import('/tests/all.js').then(m => m.run()).then(console.log)
@@ -127,8 +146,9 @@ A full pass rebuilds the map once per suite, which can outrun a single console
 call. Run it in halves if needed:
 
 ```js
-import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","gameplay","audio"]))
-import('/tests/all.js').then(m => m.run(["firing","bots","rounds","roundflow","rules","radar"]))
+import('/tests/all.js').then(m => m.run(["physics","slope","walls","lobby","gameplay"]))
+import('/tests/all.js').then(m => m.run(["audio","firing","rules","radar","rounds","roundflow"]))
+import('/tests/all.js').then(m => m.run(["bots","ctbots"]))
 ```
 
 There is also a profiler for frame cost:
@@ -151,6 +171,7 @@ import('/tests/perf.test.js').then(m => console.log(m.run()))
 | `roundflow` | rounds two onward start with a full clock and do not end early |
 | `radar` | rotation geometry, and what the radar is allowed to reveal |
 | `audio` | every sound the game plays exists and is well formed |
+| `ctbots` | CT posts, wall avoidance, rotation on intel, converging on the bomb |
 
 ## Notes
 

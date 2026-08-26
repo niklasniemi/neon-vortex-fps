@@ -35,6 +35,7 @@ this.body=null;this.bodyInWorld=false;
 this.yaw=0;this.visYaw=0;
 this.crouchAmt=0;this.slideT=0;this.slideBoosted=false;
 this.airJumps=1;this.jumpBufT=0;this.wasGrounded=false;this.fallV=0;
+this.groundedInfo={grounded:false,ny:1,surf:"concrete"};this.snapDown=false;
 this.stepPhase=0;this.padCd=0;this.teleCd=0;this.lavaTick=0;
 this.ctrl={mx:0,mz:0,jump:false,sprint:false,crouch:false,fire:false,ads:false};
 this.hitRoot=new THREE.Object3D();this.hitRoot.visible=false;
@@ -53,6 +54,32 @@ this.slots=ids.map(id=>({id:id||null,cfg:id?WEAPONS[id]:null,mag:0,reserve:0,cd:
 const first=this.slots.findIndex(s=>s.cfg);
 this.curSlot=first<0?0:first;
 }
+/**
+ * Appends a weapon to the loadout, for the "carry everything" rule.
+ * Returns the slot index it landed in.
+ */
+addWeapon(id){
+const cfg=WEAPONS[id];
+if(!cfg)return -1;
+const have=this.slots.findIndex(s=>s&&s.id===id);
+if(have>=0){this.curSlot=have;return have}
+// Reuse an empty slot before growing the list.
+let i=this.slots.findIndex(s=>s&&!s.cfg);
+if(i<0){this.slots.push({id:null,cfg:null,mag:0,reserve:0,cd:0,reloading:0,bloom:0,shotIdx:0});i=this.slots.length-1}
+const s=this.slots[i];
+s.id=id;s.cfg=cfg;s.mag=cfg.mag;s.reserve=cfg.reserve;
+s.cd=.2;s.reloading=0;s.bloom=0;s.shotIdx=0;
+// Keep the knife last so number keys stay predictable.
+this.slots.sort((a,b)=>{
+const ra=a.cfg?(a.cfg.id==="knife"?9:a.cfg.slot||5):8;
+const rb=b.cfg?(b.cfg.id==="knife"?9:b.cfg.slot||5):8;
+return ra-rb;
+});
+this.curSlot=this.slots.findIndex(x=>x.id===id);
+this.pendingSlot=-1;
+return this.curSlot;
+}
+
 /** Puts a bought primary into slot 0 and selects it. */
 setPrimary(id){
 const s0=this.slots[0];

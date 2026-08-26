@@ -243,6 +243,39 @@ export class SpanField{
   }
 
   /**
+   * Can a body WALK from a to b in a straight line?
+   *
+   * Follows the floor sample to sample rather than comparing against a straight
+   * line between the endpoints, so ramps and steps read correctly. This is the
+   * single definition of walkability -- the navmesh, the bot runtime graph and
+   * the bots themselves all use it, so they cannot disagree about whether a
+   * route exists.
+   *
+   * @param {{x:number,y:number,z:number}} a start (y is a floor height)
+   * @param {{x:number,y:number,z:number}} b end
+   * @param {number} [stepMax] largest height change per sample
+   * @param {number} [height] clearance the body needs
+   */
+  walkableBetween(a,b,stepMax,height){
+    const step=stepMax===undefined?.35:stepMax;
+    const h=height===undefined?1.38:height;
+    const dx=b.x-a.x, dz=b.z-a.z;
+    const d=Math.hypot(dx,dz);
+    if(d<.05)return true;
+    const steps=Math.min(48,Math.max(2,Math.ceil(d/.5)));
+    let last=a.y;
+    for(let i=1;i<=steps;i++){
+      const t=i/steps;
+      const s=this.spanAt(a.x+dx*t,a.z+dz*t,last+step,step);
+      if(!s)return false;
+      if(Math.abs(s.floor-last)>step)return false;
+      if(s.ceil-s.floor<h)return false;
+      last=s.floor;
+    }
+    return Math.abs(last-b.y)<step+.2;
+  }
+
+  /**
    * Line-of-sight through solid geometry, sampled along the segment.
    * Blocks when the ray passes below a floor or above a ceiling at any step.
    */

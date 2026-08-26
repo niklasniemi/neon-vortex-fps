@@ -75,6 +75,35 @@ function drawIcon(g,id){
       R(44,12,8,14);
       g.fillStyle="#ff9a3c";g.beginPath();g.arc(48,10,5,0,7);g.fill();
       break;
+    case"mp5":
+      L(14,28,60,28); R(26,28,12,14); R(40,22,10,7); L(60,28,74,28);
+      break;
+    case"famas": case"aug":
+      L(10,28,80,28); R(30,20,26,8); R(46,28,12,12);
+      if(id==="aug"){R(34,14,20,6)}
+      break;
+    case"negev":
+      L(8,26,84,26); R(22,26,26,16); R(52,20,10,8);
+      L(30,42,30,50); L(44,42,44,50);
+      break;
+    case"revolver":
+      R(30,22,26,9);
+      g.beginPath();g.arc(30,32,8,0,7);g.stroke();
+      R(24,36,9,14);
+      break;
+    case"gauss":
+      L(8,24,86,24); L(8,32,86,32);
+      for(let i=0;i<4;i++){g.beginPath();g.arc(30+i*14,28,7,0,7);g.stroke()}
+      break;
+    case"gravgun":
+      R(20,22,26,16);
+      for(let i=0;i<3;i++)L(48,28,74,14+i*14);
+      g.beginPath();g.arc(66,28,6,0,7);g.fill();
+      break;
+    case"bouncer":
+      L(14,30,58,30); R(58,22,14,16);
+      g.beginPath();g.moveTo(72,30);g.lineTo(84,18);g.lineTo(90,34);g.stroke();
+      break;
     default:
       g.strokeRect(30,20,36,20);
   }
@@ -115,6 +144,8 @@ export const BuyMenu={
     root.innerHTML="";
 
     for(const cat of BUY_CATEGORIES){
+      // Experimental weapons stay out of the way unless asked for.
+      if(cat.sandbox&&!SETTINGS.sandbox)continue;
       const col=document.createElement("div");
       col.className="buycol";
       const h=document.createElement("div");

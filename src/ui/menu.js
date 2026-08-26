@@ -96,7 +96,8 @@ export const Menu={
     // --- single player ----------------------------------------------------
     this.seg("sel-diff",Object.entries(DIFFS).map(([k,d])=>[k,d.label]),
       ()=>SETTINGS.diff,v=>{SETTINGS.diff=v;saveSettings()});
-    this.seg("sel-size",[[1,"1v1"],[2,"2v2"],[3,"3v3"],[4,"4v4"],[5,"5v5"]],
+    this.seg("sel-size",
+      [[1,"1v1"],[2,"2v2"],[3,"3v3"],[5,"5v5"],[8,"8v8"],[10,"10v10"]],
       ()=>SETTINGS.teamSize,v=>{SETTINGS.teamSize=+v;saveSettings()});
     this.seg("sel-side",[["ct","COUNTER-TERRORIST"],["t","TERRORIST"]],
       ()=>SETTINGS.side,v=>{SETTINGS.side=v;saveSettings()});
@@ -104,7 +105,7 @@ export const Menu={
     on("btn-deploy",()=>{
       AUDIO.resume();
       NET2.lobby.started=true;
-      const size=U.clamp(SETTINGS.teamSize,1,5);
+      const size=U.clamp(SETTINGS.teamSize,1,NET2.maxTeam);
       const you=SETTINGS.side==="ct"?1:2;
       const foe=you===1?2:1;
       // Solo: bots fill your side minus you, and the whole enemy side.
@@ -209,7 +210,9 @@ export const Menu={
                    ["tg-takeover","takeover","TAKE OVER A TEAM-MATE ON DEATH"],
                    ["tg-infammo","infAmmo","UNLIMITED AMMO"],
                    ["tg-infnades","infNades","UNLIMITED GRENADES"],
-                   ["tg-infmoney","infMoney","UNLIMITED MONEY"]];
+                   ["tg-infmoney","infMoney","UNLIMITED MONEY"],
+                   ["tg-carryall","carryAll","CARRY EVERY WEAPON YOU BUY"],
+                   ["tg-sandbox","sandbox","EXPERIMENTAL WEAPONS"]];
     for(const [id,key,label] of toggles){
       const el=$(id);if(!el)continue;
       const paint=()=>{el.textContent=label+"  "+(SETTINGS[key]?"ON":"OFF");el.classList.toggle("on",!!SETTINGS[key])};

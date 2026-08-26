@@ -153,7 +153,7 @@ if(NET2.isHost&&(NET2.connected||NET2._pendingGuest)){NET2._pendingGuest=false;N
 NET.spawnBotsForMatch(NET2.composition());
 if(MATCH.mode.roundBased)MATCH.mode.startRound(MATCH);
 }
-UI.refreshSlots(this.player.slots.length);
+UI.refreshSlots(this.player);
 AUDIO.ambient(def.amb);
 AUDIO.music(null);          // the map has its own ambience
 this.state="playing";

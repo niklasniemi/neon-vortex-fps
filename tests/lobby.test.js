@@ -47,12 +47,13 @@ export function run(){
   scenario(()=>{
     NET2.isHost=true; NET2.connected=true;
     NET2.lobby.hostTeam=1;
-    NET2.setBots(1,9);
-    check("bots clamp to 5 per team including humans",
-      NET2.teamCount(1)===5, `CT total ${NET2.teamCount(1)} (bots ${NET2.lobby.bots[1]})`);
-    NET2.setBots(2,9);
+    const cap=NET2.maxTeam;
+    NET2.setBots(1,99);
+    check(`bots clamp to ${cap} per team including humans`,
+      NET2.teamCount(1)===cap, `CT total ${NET2.teamCount(1)} (bots ${NET2.lobby.bots[1]})`);
+    NET2.setBots(2,99);
     check("guest's team also leaves room for the guest",
-      NET2.teamCount(2)===5&&NET2.lobby.bots[2]===4,
+      NET2.teamCount(2)===cap&&NET2.lobby.bots[2]===cap-1,
       `T total ${NET2.teamCount(2)} (bots ${NET2.lobby.bots[2]} + 1 human)`);
   });
 
@@ -69,9 +70,9 @@ export function run(){
     NET2.lobby.hostTeam=1;
     NET2.setBots(1,4); NET2.setBots(2,4);
     NET2.setHostTeam(2);
-    check("swapping sides keeps both teams at five or fewer",
-      NET2.teamCount(1)<=5&&NET2.teamCount(2)<=5,
-      `CT ${NET2.teamCount(1)} v T ${NET2.teamCount(2)}`);
+    check("swapping sides keeps both teams within the cap",
+      NET2.teamCount(1)<=NET2.maxTeam&&NET2.teamCount(2)<=NET2.maxTeam,
+      `CT ${NET2.teamCount(1)} v T ${NET2.teamCount(2)} (cap ${NET2.maxTeam})`);
   });
 
   // --- a guest cannot edit the host's lobby -------------------------------
@@ -80,6 +81,19 @@ export function run(){
     NET2.lobby.bots={1:2,2:2};
     NET2.setBots(1,5);
     check("guest cannot change bot counts", NET2.lobby.bots[1]===2, `${NET2.lobby.bots[1]}`);
+  });
+
+  // --- large matches --------------------------------------------------------
+  scenario(()=>{
+    NET2.isHost=true; NET2.connected=false;
+    NET2.lobby.hostTeam=1;
+    NET2.setBots(1,9); NET2.setBots(2,10);
+    check("a 10v10 can be assembled",
+      NET2.teamCount(1)===10&&NET2.teamCount(2)===10,
+      `CT ${NET2.teamCount(1)} v T ${NET2.teamCount(2)}`);
+    const c=NET2.composition();
+    check("10v10 composition is 9 bots plus you, against 10",
+      c[1]===9&&c[2]===10, JSON.stringify(c));
   });
 
   return out;

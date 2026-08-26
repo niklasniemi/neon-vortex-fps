@@ -63,7 +63,12 @@ fire(ent,ratio=1){
   st.shotIdx=(st.shotIdx||0)+1;
 
   const adsT=ent.isPlayer?ent.adsAmt:(ent.isBot?.6:0);
-  const base=(cfg.spread+st.bloom)*U.lerp(1,cfg.adsSpreadMult,adsT);
+  let base=(cfg.spread+st.bloom)*U.lerp(1,cfg.adsSpreadMult,adsT);
+  // Belt-fed weapons walk their cone IN as they spin up, rather than out.
+  if(cfg.spinUp){
+    const wind=U.clamp((st.shotIdx-1)/18,0,1);
+    base*=U.lerp(1,1-cfg.spinUp,wind);
+  }
   const spread=base*this.movementPenalty(ent);
 
   st.bloom=Math.min(cfg.bloomMax,st.bloom+(cfg.bloomPer||0));
@@ -106,9 +111,11 @@ throwNade(ent,type,dir,power){
   return true;
 },
 
-shot(ent,cfg,origin,baseDir,spread,muzzle){
-  const dir=this.spreadDir(baseDir,spread,new THREE.Vector3());
-  const res=PHYS.combatRay(origin,dir,cfg.range,ent,!!cfg.pierce);
+shot(ent,cfg,origin,baseDir,spread,muzzle,depth,fromPos,fromDir,power){
+  const dir=fromDir||this.spreadDir(baseDir,spread,new THREE.Vector3());
+  const from=fromPos||origin;
+  const scale=power===undefined?1:power;
+  const res=PHYS.combatRay(from,dir,cfg.range,ent,!!cfg.pierce);
   let end=null;
 
   if(res.chars.length){
@@ -117,15 +124,23 @@ shot(ent,cfg,origin,baseDir,spread,muzzle){
     let pen=1;
     for(const h of list){
       if(res.wall&&h.dist>res.wall.dist)break;
-      let dmg=cfg.damage*(h.part==="head"?cfg.headMult:1)*pen;
+      let dmg=cfg.damage*(h.part==="head"?cfg.headMult:1)*pen*scale;
       if(cfg.falloff){
         const[t0,t1,f]=cfg.falloff;
         if(h.dist>t0)dmg*=U.lerp(1,f,U.clamp((h.dist-t0)/(t1-t0),0,1));
       }
-      h.ud.takeDamage(dmg,ent,{point:h.point.clone(),head:h.part==="head",fromPos:origin,cfg});
+      h.ud.takeDamage(dmg,ent,{point:h.point.clone(),head:h.part==="head",fromPos:from,cfg});
       if(cfg.pelletKnock&&h.ud.body){
         h.ud.body.velocity.x+=dir.x*cfg.pelletKnock;
         h.ud.body.velocity.z+=dir.z*cfg.pelletKnock;
+      }
+      // Sandbox: the gravity projector barely scratches, it throws you.
+      if(cfg.launch&&h.ud.body){
+        h.ud.body.velocity.x+=dir.x*cfg.launch;
+        h.ud.body.velocity.z+=dir.z*cfg.launch;
+        h.ud.body.velocity.y+=cfg.launchUp||6;
+        if(h.ud.snapDown!==undefined)h.ud.snapDown=false;   // let them actually fly
+        FX.preset("spark",h.point,{count:10,color:[[.7,.55,1]]});
       }
       pen*=.55;                            // each body absorbs some of the round
     }
@@ -135,11 +150,22 @@ shot(ent,cfg,origin,baseDir,spread,muzzle){
     FX.spark(end,res.wall.normal,5,[.85,.72,.5],.8);
     FX.preset("puff",end,{count:2,a:.22});
     FX.bulletHole&&FX.bulletHole(end,res.wall.normal);
+
+    // Sandbox: bounce off the surface and keep going, losing bite each hop.
+    const d=depth||0;
+    if(cfg.ricochet&&d<cfg.ricochet){
+      const n=res.wall.normal;
+      const refl=dir.clone().sub(n.clone().multiplyScalar(2*dir.dot(n))).normalize();
+      const off=end.clone().addScaledVector(n,.05);
+      FX.tracer(muzzle,end,cfg.tracerColor);
+      this.shot(ent,cfg,origin,baseDir,spread,off,d+1,off,refl,scale*.8);
+      return;
+    }
   }else{
-    end=origin.clone().addScaledVector(dir,cfg.range);
+    end=from.clone().addScaledVector(dir,cfg.range);
   }
   // Only some rounds draw a visible tracer, as in CS.
-  if(Math.random()<.35||cfg.pierce)FX.tracer(muzzle,end,cfg.tracerColor);
+  if(Math.random()<.35||cfg.pierce||cfg.ricochet)FX.tracer(muzzle,end,cfg.tracerColor);
 },
 
 melee(ent,cfg,origin,baseDir){

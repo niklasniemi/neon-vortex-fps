@@ -44,20 +44,22 @@ export function buildAutoNav(b,def,spans){
   const ys=idxs.map(i=>b.navDefs[i].p.y).slice().sort((a,c)=>a-c);
   const medY=ys[Math.floor(ys.length/2)]||0;
 
-  // Two nodes link when a walkable corridor connects them.
-  const clear=(a,c)=>{
-    const d=Math.hypot(c.x-a.x,c.z-a.z);
-    const steps=Math.max(2,Math.ceil(d/1.2));
-    for(let i=1;i<steps;i++){
-      const t=i/steps;
-      const x=a.x+(c.x-a.x)*t, z=a.z+(c.z-a.z)*t, y=a.y+(c.y-a.y)*t;
-      const s=spans.spanAt(x,z,y+.3,CFG.stepMax+.2);
-      if(!s)return false;
-      if(Math.abs(s.floor-y)>CFG.stepMax+.35)return false;
-      if(s.ceil-s.floor<CFG.standHeight)return false;
-    }
-    return true;
-  };
+  /**
+   * Two nodes link when you could actually walk between them.
+   *
+   * This used to compare each sample against a straight LINE interpolated
+   * between the two node heights, and reject anything more than ~0.7m off it.
+   * Across ramps and steps that fails constantly, and the graph came out
+   * shattered -- only 32 of 349 nodes were mutually reachable, so bots could
+   * not path to most of the map at all. Following the floor from one sample to
+   * the next instead asks the right question: is every step from here a step
+   * you could take?
+   */
+  // One definition of walkability, shared with the runtime graph and the bots
+  // themselves (see SpanField.walkableBetween) so they cannot disagree.
+  const clear=(a,c)=>spans.walkableBetween(
+    {x:a.x,y:a.y-.06,z:a.z},{x:c.x,y:c.y-.06,z:c.z},
+    CFG.stepMax,CFG.standHeight);
 
   for(let i=0;i<idxs.length;i++){
     const a=b.navDefs[idxs[i]].p;
@@ -66,6 +68,62 @@ export function buildAutoNav(b,def,spans){
       const dx=a.x-c.x,dz=a.z-c.z,dy=Math.abs(a.y-c.y);
       if(dx*dx+dz*dz>LINK_R2||dy>LINK_DY)continue;
       if(clear(a,c))b.link(idxs[i],idxs[j]);
+    }
+  }
+
+  // --- connectivity ------------------------------------------------------
+  // Even with a good link test, doorways and stairs can leave islands. Find the
+  // connected components and stitch each one to the main body at its closest
+  // reachable pair, so a bot can always path to anywhere it can stand.
+  {
+    const n=b.navDefs.length;
+    const adj=new Array(n);
+    for(let i=0;i<n;i++)adj[i]=[];
+    for(const [i,j] of b.navLinks){adj[i].push(j);adj[j].push(i)}
+
+    const comp=new Int32Array(n).fill(-1);
+    const sizes=[];
+    for(let i=0;i<n;i++){
+      if(comp[i]>=0)continue;
+      const id=sizes.length;
+      let count=0;
+      const q=[i];comp[i]=id;
+      while(q.length){
+        const cur=q.pop();count++;
+        for(const k of adj[cur])if(comp[k]<0){comp[k]=id;q.push(k)}
+      }
+      sizes.push(count);
+    }
+
+    if(sizes.length>1){
+      let main=0;
+      for(let i=1;i<sizes.length;i++)if(sizes[i]>sizes[main])main=i;
+      for(let cid=0;cid<sizes.length;cid++){
+        if(cid===main)continue;
+        // Closest pair between this island and the main body.
+        let bi=-1,bj=-1,bd=1e9;
+        for(let i=0;i<n;i++){
+          if(comp[i]!==cid)continue;
+          const pi=b.navDefs[i].p;
+          for(let j=0;j<n;j++){
+            if(comp[j]!==main)continue;
+            const d=pi.distanceToSquared(b.navDefs[j].p);
+            if(d<bd){bd=d;bi=i;bj=j}
+          }
+        }
+        // Only bridge a gap a body could actually walk. Linking islands on
+        // distance alone produces routes through solid walls, and a bot that
+        // trusts one walks into the wall and stays there.
+        if(bi>=0&&bd<14*14){
+          const pa=b.navDefs[bi].p, pb=b.navDefs[bj].p;
+          if(spans.walkableBetween({x:pa.x,y:pa.y-.06,z:pa.z},
+                                   {x:pb.x,y:pb.y-.06,z:pb.z},
+                                   CFG.stepMax,CFG.standHeight)){
+            b.link(bi,bj);
+            for(let i=0;i<n;i++)if(comp[i]===cid)comp[i]=main;
+          }
+        }
+      }
     }
   }
 
@@ -83,11 +141,34 @@ export function buildAutoNav(b,def,spans){
     if((n.x-mx)*(n.x-mx)+(n.z-mz)*(n.z-mz)<40)b.navDefs[i].flags.hot=true;
   }
 
+  // Spawn points. The map authors five per side; larger matches need more, so
+  // each authored point is expanded into a small cluster of nearby positions
+  // that are validated against the collision field. Without this a 10v10
+  // starts with bots stacked two-deep on the same spot.
   const mkSpawn=(arr,team,yaw)=>{
     if(!arr)return;
-    for(const p of arr){
-      const y=spans.groundFloorAt(p[0],p[1]);
-      b.spawn(p[0],(y>-900?y:0)+.12,p[1],yaw,team);
+    const placed=[];
+    const tryPlace=(x,z)=>{
+      const f=spans.groundFloorAt(x,z);
+      if(f<-900)return false;
+      const sp=spans.spanAt(x,z,f+.1,CFG.stepMax);
+      if(!sp||sp.ceil-sp.floor<CFG.standHeight)return false;
+      for(const q of placed)if((q[0]-x)**2+(q[1]-z)**2<1.2*1.2)return false;
+      placed.push([x,z]);
+      b.spawn(x,f+.12,z,yaw,team);
+      return true;
+    };
+    for(const p of arr)tryPlace(p[0],p[1]);
+    // Ring out from each authored point until there is room for a full side.
+    const want=12;
+    for(let ring=1;ring<=3&&placed.length<want;ring++){
+      for(const p of arr){
+        if(placed.length>=want)break;
+        for(let a=0;a<8&&placed.length<want;a++){
+          const ang=a/8*Math.PI*2+ring*.4;
+          tryPlace(p[0]+Math.cos(ang)*ring*1.4, p[1]+Math.sin(ang)*ring*1.4);
+        }
+      }
     }
   };
   mkSpawn(def.spCT,1,def.ctYaw!==undefined?def.ctYaw:-90);

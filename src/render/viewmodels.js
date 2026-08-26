@@ -193,3 +193,177 @@ export function buildBombVM(){
   muzzle(g,0,0,-.16);
   return g;
 }
+
+/**
+ * Held grenade. One shape, tinted per type, so you can see what G selected.
+ * @param {number} color body colour from NADE_DEFS
+ * @param {string} kind he | flash | smoke | molotov
+ */
+export function buildGrenadeVM(color,kind){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(), body=matStd({color,metal:.3,rough:.72});
+
+  if(kind==="molotov"){
+    // Bottle: tapered glass with a rag in the neck.
+    const bot=new THREE.Mesh(new THREE.CylinderGeometry(.045,.052,.13,12),
+      new THREE.MeshStandardMaterial({color,metalness:.1,roughness:.25,
+        transparent:true,opacity:.85}));
+    bot.position.set(0,-.01,-.02);g.add(bot);
+    part(g,BOX(.022,.05,.022),pk,0,.07,-.02);
+    const rag=new THREE.Mesh(new THREE.CylinderGeometry(.012,.016,.05,8),
+      matStd({color:0xd8cba8,rough:.95}));
+    rag.position.set(0,.11,-.02);g.add(rag);
+  }else if(kind==="smoke"){
+    // Canister with a ribbed top.
+    const can=new THREE.Mesh(new THREE.CylinderGeometry(.042,.042,.13,12),body);
+    can.position.set(0,0,-.02);g.add(can);
+    for(let i=0;i<3;i++)part(g,BOX(.088,.006,.088),pk,0,.03-i*.03,-.02);
+    part(g,BOX(.03,.02,.03),pk,0,.075,-.02);
+  }else{
+    // Fragmentation body with a spoon and pin.
+    const b=new THREE.Mesh(new THREE.SphereGeometry(.05,14,10),body);
+    b.scale.set(1,1.18,1);b.position.set(0,0,-.02);g.add(b);
+    part(g,BOX(.028,.028,.028),pk,0,.06,-.02);
+    part(g,BOX(.008,.075,.014),pk,.028,.035,-.02,0,0,.12);   // spoon
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.016,.004,6,12),pk);
+    ring.position.set(-.03,.062,-.02);ring.rotation.y=Math.PI/2;g.add(ring);
+  }
+  muzzle(g,0,0,-.08);
+  return g;
+}
+
+// --- additional weapons ----------------------------------------------------
+
+export function buildMP5(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),st=VMMAT.steel(),po=VMMAT.poly();
+  part(g,BOX(.046,.062,.26),pk,0,0,-.06);
+  tube(g,.014,.16,pk,0,.016,-.26);                    // shrouded barrel
+  for(let i=0;i<4;i++)part(g,BOX(.05,.006,.006),st,0,.042,-.20-i*.04);
+  part(g,BOX(.040,.030,.10),po,0,-.030,-.20);         // forend
+  magazine(g,pk,0,-.095,-.04,.026,.140,.050,-.02);
+  part(g,BOX(.036,.064,.046),po,0,-.060,.04,.28);
+  part(g,BOX(.030,.038,.16),pk,0,.006,.16);           // retractable stock
+  ironSights(g,pk,-.24,-.02,.044);
+  muzzle(g,0,.016,-.34);
+  return g;
+}
+
+export function buildFamas(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),po=VMMAT.poly(),st=VMMAT.steel();
+  part(g,BOX(.050,.078,.40),po,0,0,.02);              // bullpup body
+  part(g,BOX(.020,.070,.30),po,0,.058,-.02);          // carry handle
+  tube(g,.010,.24,st,0,.016,-.32);
+  magazine(g,pk,0,-.090,.10,.030,.130,.060);          // mag behind the grip
+  part(g,BOX(.038,.070,.048),po,0,-.062,-.10,.26);
+  part(g,BOX(.026,.020,.018),pk,0,.098,-.16);
+  muzzle(g,0,.016,-.46);
+  return g;
+}
+
+export function buildAUG(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),po=VMMAT.poly(),st=VMMAT.steel(),gl=VMMAT.glass();
+  part(g,BOX(.052,.080,.38),po,0,0,.02);
+  const sc=tube(g,.026,.20,pk,0,.072,-.08,14);
+  const lens=new THREE.Mesh(new THREE.CircleGeometry(.024,18),gl);
+  lens.position.set(0,.072,-.181);g.add(lens);
+  tube(g,.010,.26,st,0,.014,-.34);
+  part(g,BOX(.044,.048,.10),po,0,-.010,-.22,.18);     // folding foregrip
+  magazine(g,pk,0,-.086,.10,.030,.126,.058);
+  part(g,BOX(.038,.068,.048),po,0,-.058,-.08,.24);
+  g.userData.scope=sc;
+  muzzle(g,0,.014,-.48);
+  return g;
+}
+
+export function buildNegev(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),st=VMMAT.steel(),po=VMMAT.poly();
+  part(g,BOX(.066,.090,.34),pk,0,0,-.04);             // heavy receiver
+  tube(g,.014,.36,st,0,.024,-.42);
+  for(let i=0;i<5;i++)part(g,BOX(.034,.008,.008),pk,0,.044,-.30-i*.05); // heat shield
+  const drum=new THREE.Mesh(new THREE.BoxGeometry(.10,.11,.15),po);
+  drum.position.set(0,-.10,-.02);g.add(drum);         // belt box
+  part(g,BOX(.044,.074,.052),po,0,-.070,.06,.26);
+  part(g,BOX(.050,.070,.20),po,0,-.010,.22);
+  part(g,BOX(.030,.024,.10),pk,0,.058,-.14);          // bipod stow
+  ironSights(g,pk,-.56,-.02,.058);
+  muzzle(g,0,.024,-.62);
+  return g;
+}
+
+export function buildRevolver(){
+  const g=new THREE.Group();
+  const st=VMMAT.steel(),po=VMMAT.poly(),pk=VMMAT.park();
+  part(g,BOX(.030,.040,.16),st,0,.014,-.08);
+  const cyl=new THREE.Mesh(new THREE.CylinderGeometry(.032,.032,.055,12),st);
+  cyl.rotation.x=Math.PI/2;cyl.position.set(0,.008,.01);g.add(cyl);
+  tube(g,.010,.16,pk,0,.014,-.18);
+  part(g,BOX(.026,.016,.14),pk,0,.038,-.16);          // top rib
+  part(g,BOX(.030,.070,.050),po,0,-.052,.06,.34);
+  ironSights(g,pk,-.24,.02,.040);
+  muzzle(g,0,.014,-.27);
+  return g;
+}
+
+// --- sandbox ---------------------------------------------------------------
+// Deliberately not realistic. These are the toys.
+
+export function buildGaussRifle(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),st=VMMAT.steel();
+  const glow=new THREE.MeshStandardMaterial({color:0x0a2030,emissive:0x35d6ff,emissiveIntensity:2.2});
+  part(g,BOX(.056,.070,.34),pk,0,0,-.04);
+  // Twin accelerator rails with coils between them.
+  for(const sx of[-1,1])part(g,BOX(.014,.030,.52),st,sx*.030,.022,-.42);
+  for(let i=0;i<5;i++){
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(.040,.008,6,14),glow);
+    ring.rotation.y=Math.PI/2;ring.position.set(0,.022,-.22-i*.10);g.add(ring);
+  }
+  const core=part(g,BOX(.012,.012,.50),glow,0,.022,-.42);
+  part(g,BOX(.040,.076,.050),VMMAT.poly(),0,-.066,.04,.28);
+  part(g,BOX(.046,.060,.18),pk,0,-.004,.18);
+  g.userData.core=core;
+  muzzle(g,0,.022,-.70);
+  return g;
+}
+
+export function buildGravityGun(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),st=VMMAT.steel();
+  const glow=new THREE.MeshStandardMaterial({color:0x1a0a24,emissive:0xb18cff,emissiveIntensity:2});
+  part(g,BOX(.090,.100,.24),pk,0,0,-.04);
+  // Three prongs around a floating core.
+  for(let i=0;i<3;i++){
+    const a=i/3*Math.PI*2;
+    const pr=new THREE.Mesh(new THREE.BoxGeometry(.020,.020,.20),st);
+    pr.position.set(Math.cos(a)*.055,.01+Math.sin(a)*.055,-.22);
+    pr.lookAt(0,.01,-.40);
+    g.add(pr);
+  }
+  const orb=new THREE.Mesh(new THREE.IcosahedronGeometry(.036,1),glow);
+  orb.position.set(0,.01,-.22);g.add(orb);
+  part(g,BOX(.044,.080,.052),VMMAT.poly(),0,-.072,.03,.26);
+  g.userData.orb=orb;
+  muzzle(g,0,.01,-.34);
+  return g;
+}
+
+export function buildBouncer(){
+  const g=new THREE.Group();
+  const pk=VMMAT.park(),po=VMMAT.poly();
+  const glow=new THREE.MeshStandardMaterial({color:0x24200a,emissive:0xffe14d,emissiveIntensity:1.8});
+  tube(g,.052,.34,pk,0,.010,-.24);                    // wide bore
+  const mouth=new THREE.Mesh(new THREE.CylinderGeometry(.082,.052,.10,14,1,true),pk);
+  mouth.rotation.x=Math.PI/2;mouth.position.set(0,.010,-.42);g.add(mouth);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(.056,.056,.05,14),glow);
+  band.rotation.x=Math.PI/2;band.position.set(0,.010,-.28);g.add(band);
+  const drum=new THREE.Mesh(new THREE.CylinderGeometry(.070,.070,.09,10),po);
+  drum.rotation.z=Math.PI/2;drum.position.set(0,-.05,-.02);g.add(drum);
+  part(g,BOX(.040,.072,.048),po,0,-.068,.08,.28);
+  g.userData.band=band;
+  muzzle(g,0,.010,-.48);
+  return g;
+}

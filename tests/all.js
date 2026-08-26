@@ -5,7 +5,7 @@
 // bots, running the player into walls, forcing round phases -- so sharing one
 // match between them makes results depend on execution order rather than on
 // the code under test.
-const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds","roundflow","rules","radar","audio"];
+const SUITES=["physics","slope","walls","lobby","gameplay","firing","bots","rounds","roundflow","rules","radar","audio","ctbots"];
 
 function freshMatch(){
   const e=window.engine;

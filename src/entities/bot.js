@@ -7,6 +7,9 @@ import {WEAPONS,NADE_DEFS,NADE_ORDER,defaultPistol,standardLoadout,botPickPrimar
 import {Combatant} from './combatant.js';
 import {buildCharMesh} from './charmesh.js';
 
+/** How long a sighting of the bomb carrier keeps the CT side rotating. */
+const CT_INTEL_HOLD=14;
+
 export class Bot extends Combatant{
 constructor(name,diffKey,team,accent){
 super(name);
@@ -24,6 +27,8 @@ this.strafeDir=U.pick([-1,1]);this.strafeT=0;this.crouchF=0;
 this.campUntil=0;this.stuckT=0;this.lastPos=new THREE.Vector3();
 this.jumpPulse=false;this.aimYaw=this.yaw;this.aimPitch=0;
 this.wpnChoiceT=0;this.burstLeft=0;this.burstPauseT=0;
+this.slideDir=0;this.stuckRetries=0;
+this.progBest=undefined;this.progT=0;this.detourUntil=0;
 }
 onSpawned(){
 this.visual.reset();
@@ -88,6 +93,15 @@ if(best){
 const reacq=this.target!==best||engine.time>this.memory+2.5;
 if(reacq)this.reactAt=engine.time+this.diff.react*(0.8+Math.random()*.7);
 this.target=best;this.memory=engine.time+1.6;
+
+// Seeing the bomb carrier is information the whole CT side acts on -- it is
+// what turns a static hold into a rotation. Kept fresh for a while, then
+// allowed to go stale so they do not chase forever.
+if(this.team===1&&best.hasBomb&&best.body){
+if(!MATCH.ctIntelPos)MATCH.ctIntelPos=new THREE.Vector3();
+MATCH.ctIntelPos.copy(best.body.position);
+MATCH.ctIntelT=engine.time+CT_INTEL_HOLD;
+}
 }else if(engine.time>this.memory)this.target=null;
 }
 decide(){
@@ -119,7 +133,153 @@ if(s==="HIGHGROUND"){const n=BOTMAN.nearestFlagged(this.body.position,"high");if
 if(s==="PATROL"){const n=BOTMAN.randomNode(MATCH.mode.id!=="defuse");if(n)this.goTo(n)}
 }
 targetDist(){return this.target&&this.target.alive?this.eyePos(_va).distanceTo(this.target.chestPos(_vb)):1e9}
-goToRaw(pos){this.path=BOTMAN.findPath(this.body.position,pos);this.pathI=0;this.repathT=2.8}
+/**
+ * Routes to a world position and remembers what it was routing to, so the path
+ * is only thrown away when it is actually invalid.
+ */
+goToRaw(pos){
+this.path=BOTMAN.findPath(this.body.position,pos);
+this.pathI=0;
+this.repathT=6;
+this.pathGoal=pos.clone?pos.clone():new THREE.Vector3(pos.x,pos.y,pos.z);
+// A* starts from the nearest node, which can be a step backwards. Drop that
+// one waypoint if so -- but only one, or a curving route gets gutted.
+if(this.path&&this.path.length>1){
+const here=this.body.position;
+if(this.path[0].distanceToSquared(here)>this.path[1].distanceToSquared(here))
+this.path.shift();
+}
+}
+
+/**
+ * Is the straight line between two points actually walkable?
+ * Samples the collision field for a floor within step height and standing
+ * clearance the whole way. Without this a bot happily walks into a wall
+ * because the goal is "close".
+ */
+walkableLine(from,to){
+const SF=WORLD&&WORLD.spans;
+if(!SF)return true;
+const dx=to.x-from.x, dz=to.z-from.z;
+const d=Math.hypot(dx,dz);
+if(d<.05)return true;
+const steps=Math.min(24,Math.max(2,Math.ceil(d/.6)));
+let last=from.y-CFG.feetOff;
+for(let i=1;i<=steps;i++){
+const t=i/steps;
+const x=from.x+dx*t, z=from.z+dz*t;
+const s=SF.spanAt(x,z,last+CFG.stepMax,CFG.stepMax);
+if(!s)return false;
+if(Math.abs(s.floor-last)>CFG.stepMax+.05)return false;
+if(s.ceil-s.floor<CFG.standHeight)return false;
+last=s.floor;
+}
+return true;
+}
+
+/**
+ * Walks toward a world point, going around obstacles rather than into them.
+ *
+ * The old code dropped pathfinding entirely inside 5m and drove straight at
+ * the goal, which is why bots parked against walls near their post -- CT bots
+ * most of all, since their objectives sit right on the bombsites.
+ *
+ * @returns {boolean} true once within `arrive` metres
+ */
+moveToward(goal,dt,arrive){
+if(!goal)return false;
+_vd.subVectors(goal,this.body.position);_vd.y=0;
+const d=_vd.length();
+if(d<=(arrive||1.1)){
+this.ctrl.mz=0;this.ctrl.mx=0;
+this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+this.path=null;
+return true;
+}
+// A short, provably clear hop is worth taking directly; anything else routes
+// through the nav graph.
+if(d<8&&this.walkableLine(this.body.position,goal)){
+this.path=null;
+this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+this.ctrl.mz=1;this.ctrl.mx=0;
+return false;
+}
+// Only rebuild the route when it is genuinely no longer usable. Repathing on
+// a timer while a good path is half-walked made bots oscillate: each new
+// search could start from a node behind them and undo the last few metres.
+// No timer-based repathing. Waypoints can be ten metres apart, so a bot only
+// clears one or two every few seconds -- rebuilding the route on a clock meant
+// it perpetually restarted near the beginning and never finished a journey.
+// A route is replaced only when it is finished, aimed somewhere else, or the
+// stuck handler has thrown it away.
+const stale=!this.path||this.pathI>=this.path.length;
+const moved=this.pathGoal&&this.pathGoal.distanceToSquared(goal)>4;
+
+// Progress watchdog. Being blocked does not always look like being stuck --
+// a bot can hold a valid path, keep signalling movement, and still make no
+// headway at a pinch point. Watch the distance to the objective instead: if it
+// has not improved in a while, the current plan is not working, so route via
+// somewhere else entirely and approach from a different direction.
+if(this.progBest===undefined||moved){this.progBest=d;this.progT=0}
+if(d<this.progBest-.5){this.progBest=d;this.progT=0}
+else this.progT=(this.progT||0)+dt;
+let detour=false;
+if(this.progT>6){
+this.progT=0;this.progBest=d;
+const via=BOTMAN.randomNode(true);
+if(via&&via.p.distanceTo(this.body.position)>4){
+this.goToRaw(via.p);
+this.detourUntil=engine.time+5;      // commit to it briefly
+detour=true;
+}
+}
+if(!detour&&engine.time>(this.detourUntil||0)&&(stale||moved)){
+// Route to the nearest nav node we can actually reach that is close to the
+// goal, not to the goal itself. Pathing to a bare world point often produced
+// a route made entirely of waypoints already within arrival range: followPath
+// consumed them all, returned nothing, the path was discarded, and the whole
+// thing repeated every frame with the bot standing still.
+const via=BOTMAN.reachableNode(this.body.position,goal);
+this.goToRaw(via?via.p:goal);
+}
+
+if(!this.followPath(dt)){
+// End of the route. Close the last gap on foot when it is clear; otherwise
+// hand it to the stuck handler rather than spinning on a dead path.
+if(this.walkableLine(this.body.position,goal)){
+_vd.subVectors(goal,this.body.position);_vd.y=0;
+this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+this.ctrl.mz=1;this.ctrl.mx=0;
+}else{
+// Aim at the last waypoint we do have, so we keep moving while the stuck
+// handler works out a better route.
+const lastWp=this.path&&this.path.length?this.path[this.path.length-1]:null;
+if(lastWp&&lastWp.distanceTo(this.body.position)>1.2){
+_vd.subVectors(lastWp,this.body.position);_vd.y=0;
+this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+this.ctrl.mz=1;this.ctrl.mx=0;
+}else{
+this.path=null;this.ctrl.mz=0;
+this.stuckT=Math.max(this.stuckT,1.0);   // let recovery escalate
+}
+}
+}
+
+// Failsafe: a bot with somewhere to be must never simply stand there. If none
+// of the branches above produced a movement command, walk at the objective and
+// let the controller's wall sliding work the rest out. Standing still is the
+// one outcome that always looks broken.
+if(this.ctrl.mz===0&&this.ctrl.mx===0){
+_vd.subVectors(goal,this.body.position);_vd.y=0;
+if(_vd.lengthSq()>.01){
+this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+this.ctrl.mz=1;
+// Drift sideways as well, so a flat wall gets slid along rather than leaned on.
+this.ctrl.mx=this.slideDir||0;
+}
+}
+return false;
+}
 defusalBrain(dt){
 this.ctrl.plantE=false;this.ctrl.mx=0;this.ctrl.mz=0;this.ctrl.sprint=false;
 const md=MATCH.mode;
@@ -140,30 +300,45 @@ else this.faceYaw(Math.atan2(-(tp.x-eye.x),-(tp.z-eye.z)),dt,this.diff.turn*.6);
 return;
 }
 }
-if(this.objRole==="retrieve"&&MATCH.mode.bombState==="dropped")this.objPoint=MATCH.mode.bombPos?MATCH.mode.bombPos.clone():this.objPoint;
-const goal=this.objPoint;
-if(!goal){this.yaw+=dt*.5;return}
-_vd.subVectors(goal,this.body.position);_vd.y=0;
-const d=_vd.length();
-if(d>5){
-if(!this.path||this.pathI>=this.path.length||this.repathT<=0)this.goToRaw(goal);
-this.followPath(dt);
-}else{
-this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.9);
+if(this.objRole==="retrieve"&&md.bombState==="dropped")
+this.objPoint=md.bombPos?md.bombPos.clone():this.objPoint;
+
+const goal=this.team===1?this.ctGoal(md):this.objPoint;
+if(!goal){this.yaw+=dt*.5;this.checkStuck(dt);return}
+
 this.ctrl.sprint=false;
-if(d>1.1){this.ctrl.mz=1;this.ctrl.mx=0}
-else{
-this.ctrl.mz=0;this.ctrl.mx=0;
+const arrived=this.moveToward(goal,dt,1.1);
+if(arrived){
 if(this.objRole==="plant"&&md.bombState==="carried"&&this.hasBomb){
-const s=md.siteAt(this.body.position);
-if(s)this.ctrl.plantE=true;
+if(md.siteAt(this.body.position))this.ctrl.plantE=true;
 }
-if(this.objRole==="defuse"&&md.bombState==="planted"&&this.team===1&&md.bombPos){
+if(this.team===1&&md.bombState==="planted"&&md.bombPos){
 if(this.body.position.distanceTo(md.bombPos)<1.7)this.ctrl.plantE=true;
 }
 }
-}
 this.checkStuck(dt);
+}
+
+/**
+ * Where a counter-terrorist should be right now.
+ *
+ * Three tiers, most urgent first:
+ *   1. Bomb planted    - it beeps, so every CT knows. All of them converge to
+ *                        contest the site and defuse it.
+ *   2. Bomb located    - a CT has seen the carrier, or it lies dropped in the
+ *                        open. Rotate onto that, but let the intel go stale.
+ *   3. Nothing known   - hold your assigned post (A, B or mid).
+ *
+ * @returns {THREE.Vector3|null}
+ */
+ctGoal(md){
+if(md.bombState==="planted"&&md.bombPos)return md.bombPos;
+
+const M=MATCH;
+if(md.bombState==="dropped"&&md.bombPos)return md.bombPos;
+if(M.ctIntelPos&&engine.time<M.ctIntelT)return M.ctIntelPos;
+
+return this.objPoint;
 }
 goTo(node){
 this.path=BOTMAN.findPath(this.body.position,node.p);
@@ -179,7 +354,9 @@ this.pathI++;
 return this.followPath(dt);
 }
 const nxt=this.path[Math.min(this.pathI+1,this.path.length-1)];
-if(nxt.y>this.body.position.y+.5&&hd<2.4&&this.groundedInfo.grounded)this.jumpPulse=true;
+// groundedInfo only exists once applyMove has run at least once; a bot that
+// paths on its very first tick would crash here otherwise.
+if(nxt.y>this.body.position.y+.5&&hd<2.4&&this.groundedInfo&&this.groundedInfo.grounded)this.jumpPulse=true;
 this.faceYaw(Math.atan2(-_vd.x,-_vd.z),dt,this.diff.turn*.8);
 this.ctrl.mz=1;this.ctrl.mx=0;
 return wp;
@@ -325,8 +502,38 @@ const b=this.body;
 const moved=b.position.distanceTo(this.lastPos);
 if(this.ctrl.mz!==0||this.ctrl.mx!==0){
 if(moved<dt*.6)this.stuckT+=dt;else this.stuckT=Math.max(0,this.stuckT-dt*2);
-if(this.stuckT>.45){this.jumpPulse=true;this.ctrl.mx=U.rand(-1,1)}
-if(this.stuckT>1.2){this.stuckT=0;this.repathT=0;this.path=null;if(MATCH.mode.roundBased&&this.objPoint){this.goToRaw(this.objPoint)}else this.setState(this.state,this.seekFlag)}
+
+// Escalating recovery. Pressing into a wall for a second and a half used to
+// just re-issue the same path, so a bot could grind against a corner for the
+// whole round.
+if(this.stuckT>.35){
+// First: commit to one side rather than jittering left and right.
+if(!this.slideDir||this.stuckT<.4)this.slideDir=Math.random()<.5?-1:1;
+this.ctrl.mx=this.slideDir;
+}
+if(this.stuckT>.9)this.jumpPulse=true;      // maybe it is a lip, not a wall
+if(this.stuckT>1.4){
+this.stuckT=0;this.repathT=0;this.path=null;this.slideDir=0;
+// Route from a nav node we can actually reach instead of from inside the
+// obstacle, and pick a fresh one so we stop retrying the same blocked line.
+const detour=BOTMAN.nearestNode(this.body.position);
+const goal=(MATCH.mode.roundBased&&this.objPoint)?this.objPoint:null;
+if(goal){
+this.path=BOTMAN.findPath(detour?detour.p:this.body.position,goal);
+this.pathI=0;this.repathT=2.8;
+this.stuckRetries=(this.stuckRetries||0)+1;
+// Still jammed after several attempts: take a random node first to break
+// out of the pocket entirely, then resume.
+if(this.stuckRetries>2){
+this.stuckRetries=0;
+const via=BOTMAN.randomNode(true);
+if(via)this.goTo(via);
+}
+}else this.setState(this.state,this.seekFlag);
+}
+}else{
+this.stuckT=Math.max(0,this.stuckT-dt*2);
+this.slideDir=0;
 }
 this.lastPos.copy(b.position);
 if(this.jumpPulse){

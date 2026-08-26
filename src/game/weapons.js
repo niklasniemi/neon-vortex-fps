@@ -3,7 +3,9 @@
 // Fire rates are divided by PACE because this build runs at roughly a third of
 // CS tempo (half-scale operators, ~1.6 m/s run) -- keeping the ratio between
 // guns intact is what makes them feel like the originals.
-import {buildAK47,buildM4A1,buildAWP,buildDeagle,buildGlock,buildUSP,buildMP9,buildNova,buildKnife} from '../render/viewmodels.js';
+import {buildAK47,buildM4A1,buildAWP,buildDeagle,buildGlock,buildUSP,buildMP9,buildNova,buildKnife,
+        buildMP5,buildFamas,buildAUG,buildNegev,buildRevolver,
+        buildGaussRifle,buildGravityGun,buildBouncer} from '../render/viewmodels.js';
 
 const PACE=3.0;
 const rpm=r=>+(60/r*PACE).toFixed(3);   // rounds/min -> seconds between shots
@@ -86,8 +88,97 @@ export const WEAPONS={
     spread:.0008,bloomPer:.060,bloomMax:.16,bloomDecay:.34,adsSpreadMult:.02,
     recoil:{pitch:.0300,yaw:.0060,kick:.42,shake:.36},
     adsFov:22,scope:true,scopeLevels:[40,10],unscopeOnFire:false,
+    adsSens:.30,          // heavy glass -- deliberately slow to track with
     tracerColor:0xfff0c0,
     aiRange:[16,90],snd:"shot_awp",vm:buildAWP},
+
+  // --- additional service weapons -----------------------------------------
+  mp5:{
+    id:"mp5",name:"MP5-SD",short:"MP5",slot:1,classType:"hitscan",price:1500,
+    damage:27,headMult:4,armorPen:.615,range:95,falloff:[20,50,.55],
+    fireRate:rpm(800),mag:30,reserve:120,reload:2.4,
+    spread:.0090,bloomPer:.0038,bloomMax:.058,bloomDecay:.32,adsSpreadMult:.5,
+    recoil:{pitch:.0046,yaw:.0022,kick:.06,shake:.05},
+    adsFov:63,tracerColor:0xffd9a0,silenced:true,
+    aiRange:[3,24],snd:"shot_rifle_sil",vm:buildMP5},
+
+  famas:{
+    id:"famas",name:"FAMAS",short:"FAMAS",slot:1,classType:"hitscan",price:2050,team:1,
+    damage:30,headMult:4,armorPen:.70,range:130,falloff:[40,90,.70],
+    fireRate:rpm(666),mag:25,reserve:90,reload:3.3,
+    spread:.0070,bloomPer:.0046,bloomMax:.078,bloomDecay:.28,adsSpreadMult:.30,
+    recoil:{pitch:.0095,yaw:.0038,kick:.11,shake:.09},
+    pattern:[[0,1],[0,1],[-.1,.9],[-.25,.75],[-.35,.6],[-.2,.5],[.15,.42],
+             [.45,.36],[.55,.32],[.4,.3],[.1,.28],[-.25,.28],[-.5,.26]],
+    adsFov:57,tracerColor:0xffd9a0,
+    aiRange:[8,42],snd:"shot_rifle",vm:buildFamas},
+
+  aug:{
+    id:"aug",name:"AUG",short:"AUG",slot:1,classType:"hitscan",price:3300,team:1,
+    damage:28,headMult:4,armorPen:.90,range:150,falloff:[48,105,.78],
+    fireRate:rpm(666),mag:30,reserve:90,reload:3.8,
+    spread:.0058,bloomPer:.0040,bloomMax:.068,bloomDecay:.32,adsSpreadMult:.18,
+    recoil:{pitch:.0082,yaw:.0030,kick:.09,shake:.08},
+    pattern:[[0,1],[0,.95],[-.1,.85],[-.2,.7],[-.3,.55],[-.15,.45],[.15,.4],
+             [.4,.34],[.5,.3],[.35,.28],[.05,.26],[-.25,.26]],
+    adsFov:38,scope:true,adsSens:.62,tracerColor:0xffd9a0,
+    aiRange:[10,60],snd:"shot_rifle",vm:buildAUG},
+
+  negev:{
+    id:"negev",name:"NEGEV",short:"NEGEV",slot:1,classType:"hitscan",price:1700,
+    damage:35,headMult:4,armorPen:.75,range:130,falloff:[38,90,.65],
+    fireRate:rpm(1000),mag:150,reserve:200,reload:5.7,
+    // Wildly inaccurate until you have been holding the trigger for a while.
+    spread:.030,bloomPer:.0016,bloomMax:.10,bloomDecay:.10,adsSpreadMult:.5,
+    spinUp:.9,
+    recoil:{pitch:.0070,yaw:.0044,kick:.09,shake:.10},
+    adsFov:60,tracerColor:0xffcf90,
+    aiRange:[6,40],snd:"shot_rifle",vm:buildNegev},
+
+  revolver:{
+    id:"revolver",name:"R8 REVOLVER",short:"R8",slot:2,classType:"hitscan",price:600,
+    damage:86,headMult:4,armorPen:.93,range:140,falloff:[40,95,.75],
+    fireRate:rpm(200),mag:8,reserve:40,reload:2.6,
+    spread:.008,bloomPer:.030,bloomMax:.14,bloomDecay:.40,adsSpreadMult:.20,
+    recoil:{pitch:.0300,yaw:.0080,kick:.34,shake:.34},
+    adsFov:52,tracerColor:0xffc27a,auto:false,
+    aiRange:[6,45],snd:"shot_deagle",vm:buildRevolver},
+
+  // --- sandbox ------------------------------------------------------------
+  // Deliberately unrealistic. Flagged `sandbox` so the buy menu can group them
+  // and a match can hide them.
+  gauss:{
+    id:"gauss",name:"GAUSS RIFLE",short:"GAUSS",slot:1,classType:"hitscan",price:5500,
+    sandbox:true,
+    damage:130,headMult:2,armorPen:1,range:300,pierce:true,
+    fireRate:1.1,mag:6,reserve:24,reload:3.0,
+    spread:.0006,bloomPer:.040,bloomMax:.10,bloomDecay:.5,adsSpreadMult:.05,
+    recoil:{pitch:.0260,yaw:.0040,kick:.38,shake:.34},
+    adsFov:34,scope:true,adsSens:.38,tracerColor:0x35d6ff,
+    aiRange:[14,90],snd:"shot_awp",vm:buildGaussRifle},
+
+  gravgun:{
+    id:"gravgun",name:"GRAVITY PROJECTOR",short:"GRAV",slot:1,classType:"hitscan",price:4200,
+    sandbox:true,
+    damage:18,headMult:1.2,armorPen:.5,range:34,
+    // Barely hurts; the point is the shove.
+    launch:16, launchUp:7,
+    fireRate:.62,mag:20,reserve:60,reload:2.4,
+    spread:.020,bloomPer:.004,bloomMax:.06,bloomDecay:.5,adsSpreadMult:.6,
+    recoil:{pitch:.0090,yaw:.0030,kick:.16,shake:.14},
+    adsFov:64,tracerColor:0xb18cff,
+    aiRange:[3,16],snd:"shot_smg",vm:buildGravityGun},
+
+  bouncer:{
+    id:"bouncer",name:"BOUNCE CANNON",short:"BOUNCE",slot:1,classType:"hitscan",price:3800,
+    sandbox:true,
+    pellets:3,damage:22,headMult:2,armorPen:.7,range:120,
+    ricochet:3,                       // shots bounce off walls this many times
+    fireRate:.55,mag:12,reserve:48,reload:2.6,
+    spread:.030,bloomPer:.006,bloomMax:.09,bloomDecay:.4,adsSpreadMult:.6,
+    recoil:{pitch:.0150,yaw:.0060,kick:.22,shake:.20},
+    adsFov:64,tracerColor:0xffe14d,
+    aiRange:[4,30],snd:"shot_shotgun",vm:buildBouncer},
 
   knife:{
     id:"knife",name:"KNIFE",short:"KNIFE",slot:3,classType:"melee",price:0,
@@ -99,15 +190,17 @@ export const WEAPONS={
     aiRange:[0,1.6],snd:"knife_slash",vm:buildKnife}
 };
 
-export const WEAPON_ORDER=["ak47","m4a1","awp","mp9","nova","deagle","glock","usp","knife"];
+export const WEAPON_ORDER=["ak47","m4a1","famas","aug","awp","negev","mp9","mp5","nova",
+  "deagle","revolver","glock","usp","gauss","gravgun","bouncer","knife"];
 
 // Buy-menu columns, CS layout.
 export const BUY_CATEGORIES=[
-  {id:"pistols",label:"PISTOLS",items:["deagle","glock","usp"]},
-  {id:"midtier",label:"MID-TIER",items:["mp9","nova"]},
-  {id:"rifles",label:"RIFLES",items:["ak47","m4a1","awp"]},
+  {id:"pistols",label:"PISTOLS",items:["deagle","revolver","glock","usp"]},
+  {id:"midtier",label:"MID-TIER",items:["mp9","mp5","nova","negev"]},
+  {id:"rifles",label:"RIFLES",items:["ak47","m4a1","famas","aug","awp"]},
   {id:"gear",label:"EQUIPMENT",items:["kevlar","kevlar_helmet","defuser"]},
-  {id:"nades",label:"GRENADES",items:["he","flash","smoke","molotov"]}
+  {id:"nades",label:"GRENADES",items:["he","flash","smoke","molotov"]},
+  {id:"sandbox",label:"SANDBOX",sandbox:true,items:["gauss","gravgun","bouncer"]}
 ];
 
 export const GEAR={

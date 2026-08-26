@@ -49,7 +49,7 @@ export function buyBlocked(c,item){
     if(!w)return "N/A";
     if(w.team&&w.team!==team)return team===1?"T ONLY":"CT ONLY";
     if(w.slot===3)return "N/A";                    // knife is never bought
-    if(c.slots[0]&&c.slots[0].id===item)return "OWNED";
+    if(c.slots.some(sl=>sl&&sl.id===item))return "OWNED";
   }
   if(!Cheats.money(c)&&(c.money||0)<price)return "NO FUNDS";
   return null;
@@ -78,24 +78,29 @@ export function applyBuy(c,item){
     return true;
   }
   const w=WEAPONS[item];
+
+  // "Carry all" turns the loadout into an armoury: every purchase gets its own
+  // slot instead of replacing the one you already had.
+  if(SETTINGS.carryAll&&c===engine.player){
+    c.addWeapon(item);
+    if(UI)UI.slotsDirty=true;
+    return true;
+  }
+
   if(w.slot===2){
     // Pistol replaces the sidearm in slot 1.
     const s=c.slots[1];
     s.id=item;s.cfg=w;s.mag=w.mag;s.reserve=w.reserve;s.cd=.2;s.reloading=0;s.bloom=0;
     if(c===engine.player){
-      for(const id in c.vms)c.vms[id].visible=false;
       c.curSlot=1;
-      const vm=c.getVM(w.id);if(vm)vm.visible=true;
+      if(c.refreshHeld)c.refreshHeld();
       if(UI)UI.slotsDirty=true;
     }
     return true;
   }
   c.setPrimary(item);
-  if(c===engine.player){
-    for(const id in c.vms)c.vms[id].visible=false;
-    const vm=c.getVM(w.id);if(vm)vm.visible=true;
-    if(UI)UI.slotsDirty=true;
-  }
+  if(c===engine.player&&c.refreshHeld)c.refreshHeld();
+  if(UI)UI.slotsDirty=true;
   return true;
 }
 

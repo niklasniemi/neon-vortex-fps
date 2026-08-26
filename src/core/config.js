@@ -55,7 +55,11 @@ export const SETTINGS=Object.assign({
   takeover:false,
   // Practice cheats. Local only -- a P2P guest is simulated by the host, so
   // these cannot take effect there.
-  infAmmo:false,infNades:false,infMoney:false
+  infAmmo:false,infNades:false,infMoney:false,
+  // Keep every weapon you buy instead of one primary and one sidearm.
+  carryAll:false,
+  // Show the experimental weapons in the buy menu.
+  sandbox:false
 },loadSettings());
 
 export function saveSettings(){try{localStorage.setItem("nv_settings",JSON.stringify(SETTINGS))}catch(e){}}

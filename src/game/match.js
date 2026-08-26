@@ -7,6 +7,9 @@ import {MODES} from './modes.js';
 import {ARENAS} from '../world/maps.js';
 import {NET2} from '../net/p2p.js';
 
+/** Largest side the lobby allows. */
+export const MAX_TEAM=10;
+
 // How far from a spawn point still counts as "in spawn" for late buying.
 const SPAWN_BUY_R2=9*9;
 
@@ -20,7 +23,7 @@ this.lastShooter=null;this.lastShotT=-9;this._evalT=0;
 }
 start(mapId,modeId){
 this.mode=Object.assign({},MODES[modeId]||MODES.defuse);
-this.mode.teamSize=U.clamp(SETTINGS.teamSize,1,5);
+this.mode.teamSize=U.clamp(SETTINGS.teamSize,1,MAX_TEAM);
 this.mapId=mapId;this.def=ARENAS[mapId];
 this.scores={t1:0,t2:0,top:0};this.cpOwner=0;this.cpProg=0;
 this.respawnQ.length=0;this.sudden=false;this.endPending=false;this.voteTimer=-1;

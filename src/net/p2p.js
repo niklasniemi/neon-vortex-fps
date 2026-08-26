@@ -33,10 +33,12 @@ humansOn(team){
 guestTeam(){return this.lobby.hostTeam===1?2:1},
 teamCount(team){return this.humansOn(team)+(this.lobby.bots[team]|0)},
 
+maxTeam:10,
+
 setBots(team,n){
   if(!this.isHost&&this.connected)return;      // guests cannot edit the lobby
   const humans=this.humansOn(team);
-  this.lobby.bots[team]=Math.max(0,Math.min(5-humans,n|0));
+  this.lobby.bots[team]=Math.max(0,Math.min(this.maxTeam-humans,n|0));
   this.pushLobby();
 },
 setHostTeam(t){

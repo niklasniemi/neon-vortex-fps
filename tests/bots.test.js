@@ -61,23 +61,30 @@ export function run(){
       hidden.push(o);o.alive=false;
     }
 
+    // Pick a goal in the bot's own graph component. The navmesh legitimately
+    // contains islands -- ledges reachable only by jumping -- and sending it to
+    // one measures the map rather than the AI.
     const here=b.body.position.clone();
+    const B=V.BOTMAN;
+    const comp=B.mainComponent;
+    const myComp=comp?comp[B.nodes.indexOf(B.nearestNode(here))]:null;
     let far=null,farD=0;
-    for(const n of V.BOTMAN.nodes){
-      const d=n.p.distanceTo(here);
-      if(d>farD&&d<40){farD=d;far=n}
+    for(let i=0;i<B.nodes.length;i++){
+      if(comp&&comp[i]!==myComp)continue;
+      const d=B.nodes[i].p.distanceTo(here);
+      if(d>farD&&d<26){farD=d;far=B.nodes[i]}
     }
     b.objRole="escort";
     b.objPoint=far?far.p.clone():null;
 
     const startD=b.objPoint?b.body.position.distanceTo(b.objPoint):0;
-    for(let i=0;i<420;i++){ e.time+=DT; b.update(DT); }
+    for(let i=0;i<1200;i++){ e.time+=DT; b.update(DT); }
     const endD=b.objPoint?b.body.position.distanceTo(b.objPoint):0;
     const closed=startD-endD;
 
     for(const o of hidden)o.alive=true;
-    check("bots: walk toward their objective", closed>1.5,
-      `closed ${closed.toFixed(2)}m of ${startD.toFixed(1)}m in 7s`);
+    check("bots: walk toward their objective", closed>startD*0.5,
+      `closed ${closed.toFixed(1)}m of ${startD.toFixed(1)}m in 20s`);
 
     const feet=b.body.position.y-0.42;
     const span=SF.spanAt(b.body.position.x,b.body.position.z,feet+0.05,0.35);

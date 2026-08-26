@@ -11,7 +11,7 @@ import {NET2} from '../net/p2p.js';
 export const MODES={
 defuse:{
 id:"defuse",label:"BOMB DEFUSAL",teams:true,teamSize:5,killLimit:0,
-roundsToWin:8,roundTime:115,bombTime:40,plantTime:3.2,defuseTime:5,respawn:0,roundBased:true,
+roundsToWin:8,roundTime:175,bombTime:60,plantTime:3.2,defuseTime:5,respawn:0,roundBased:true,
 // CS timings: 15s frozen at spawn, and the buy menu stays open for 20s from
 // round start. After that you can still buy while you are in your spawn zone
 // and have not moved yet -- see MatchController.canBuy().
@@ -31,6 +31,7 @@ m.roundPhase="freeze";m.phaseT=this.freezeTime;m._lastN=99;m.buyT=this.buyTime;
 // and the round ended the instant it went live -- always as a CT win on
 // "TIME EXPIRED".
 m.roundT=this.roundTime;
+m.ctIntelPos=null;m.ctIntelT=0;   // CT sightings do not carry between rounds
 m.bombState="carried";m.plantProg=0;m.defuseProg=0;m.siteName="";
 m.respawnQ.length=0;
 UI.progHide();
@@ -74,27 +75,64 @@ c.lostGear=false;c.leftSpawn=false;c.refillAmmo();
 if(c.isBot)this.botBuy(c);
 }
 m.sitePlan=U.pick(["A","B"]);
-let ctIdx=0;
+// --- assign posts --------------------------------------------------------
+// The CT side is split across A, B and mid rather than being dealt out
+// round-robin, so both sites are always covered and someone always watches
+// the middle. Roughly 40 / 40 / 20, scaled to however many bots there are --
+// which matters once team sizes go past five.
+const ctBots=engine.combatants.filter(c=>c.isBot&&c.alive&&c.team===1);
+const ctPosts=[];
+{
+const n=ctBots.length;
+const mid=n<=2?0:Math.max(1,Math.round(n*0.2));
+const rest=n-mid;
+const a=Math.ceil(rest/2), b=rest-a;
+for(let i=0;i<a;i++)ctPosts.push("A");
+for(let i=0;i<b;i++)ctPosts.push("B");
+for(let i=0;i<mid;i++)ctPosts.push("MID");
+// Interleave so the first bots out of spawn do not all take the same site.
+ctPosts.sort(()=>Math.random()-.5);
+}
+
+// Terrorist jobs: mostly escort the bomb, a quarter go wide.
+const tBots=engine.combatants.filter(c=>c.isBot&&c.alive&&c.team===2&&c!==m.carrier);
+const tPosts=[];
+{
+const flankers=Math.max(tBots.length>=3?1:0,Math.round(tBots.length*0.25));
+for(let i=0;i<flankers;i++)tPosts.push("flank");
+while(tPosts.length<tBots.length)tPosts.push("escort");
+tPosts.sort(()=>Math.random()-.5);
+}
+
+let ctIdx=0,tIdx=0;
 for(const c of engine.combatants){
 if(!c.isBot||!c.alive)continue;
 if(c.team===2){
-const r=Math.random();
 if(c===m.carrier){c.objRole="plant";c.objSite=m.sitePlan}
-else if(r<.75){c.objRole="escort";c.objSite=m.sitePlan}
-else{c.objRole="flank";c.objSite=m.sitePlan==="A"?"B":"A"}
+else{
+// Deterministic split rather than a per-bot coin flip, which could leave a
+// whole side on the same job. Roughly a quarter go wide.
+const post=tPosts[tIdx++]||"escort";
+if(post==="flank"){c.objRole="flank";c.objSite=m.sitePlan==="A"?"B":"A"}
+else{c.objRole="escort";c.objSite=m.sitePlan}
+}
 }else{
-ctIdx++;
-if(ctIdx===1){c.objRole="roam";c.objSite="MID"}
-else{c.objSite=ctIdx%2?"A":"B";c.objRole="hold"+c.objSite}
+const post=ctPosts[ctIdx++]||"A";
+if(post==="MID"){c.objRole="roam";c.objSite="MID"}
+else{c.objSite=post;c.objRole="hold"+post}
 }
 c.objPoint=this.rolePoint(m,c);
-c.rotateAt=this.roundTime-45;   // m is the controller, not the mode
+// Snap the post onto ground the bot can actually reach, so nobody is sent to
+// a ledge only a jump could get to.
+if(c.objPoint&&c.body){
+const r=BOTMAN.reachableNode(c.body.position,c.objPoint);
+if(r)c.objPoint.copy(r.p);
+}
+c.rotateAt=this.roundTime-70;   // m is the controller, not the mode
 }
 const youT=engine.player.team===2;
-const sA=WORLD.def.sites.find(s=>s.name==="A"),sB=WORLD.def.sites.find(s=>s.name==="B");
 UI.announce("ROUND "+m.round,youT?(m.carrier===engine.player?"YOU HAVE THE BOMB \u2014 PLANT AT A OR B":"ESCORT THE BOMB \u2014 TARGET SITE "+m.sitePlan):"DEFEND SITES A & B \u2014 STOP THE PLANT");
-UI.toast("SITES: A @ X"+sA.x.toFixed(0)+" Z"+sA.z.toFixed(0)+" \u00B7 B @ X"+sB.x.toFixed(0)+" Z"+sB.z.toFixed(0)+" \u00B7 F9 = COORD GRID");
-if(m.carrier===engine.player)UI.toast("HOLD E INSIDE SITE A OR B TO PLANT \u00B7 40s FUSE");
+if(m.carrier===engine.player)UI.toast("HOLD E INSIDE SITE A OR B TO PLANT \u00B7 "+this.bombTime+"s FUSE");
 AUDIO.play("beep");
 },
 botBuy(c){
@@ -274,7 +312,7 @@ if(m.roundT<=0&&m.bombState!=="planted"){this.endRound(m,"t1","TIME EXPIRED \u20
 if(m.bombState==="carried"){
 for(const c of engine.combatants){
 if(!c.isBot||!c.alive||c.team!==2)continue;
-if(c.objRole==="flank"&&m.roundT<45){c.objRole="escort";c.objSite=m.sitePlan;c.objPoint=this.rolePoint(m,c)}
+if(c.objRole==="flank"&&m.roundT<70){c.objRole="escort";c.objSite=m.sitePlan;c.objPoint=this.rolePoint(m,c)}
 }
 if(m.bombState==="dropped"){
 let retriever=null,bd=1e9;

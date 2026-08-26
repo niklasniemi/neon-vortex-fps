@@ -31,14 +31,26 @@ this.buildSlots();
 this.bindMenu();
 this.bindPause();
 }
-buildSlots(){this.refreshSlots(5)}
+buildSlots(){this.refreshSlots(3)}
+/**
+ * Rebuilds the weapon slot strip. Labels use each weapon's short name so a
+ * long "carry everything" loadout stays readable.
+ * @param {number|Combatant} n slot count, or the owner to read slots from
+ */
 refreshSlots(n){
+const owner=(typeof n==="object")?n:null;
+const slots=owner?owner.slots:null;
+const count=owner?slots.length:n;
 this.el.slots.innerHTML="";
-for(let i=0;i<n;i++){
+for(let i=0;i<count;i++){
 const d=document.createElement("div");
-d.className="slot";d.textContent=i+1;
+d.className="sl";
+const cfg=slots&&slots[i]?slots[i].cfg:null;
+d.textContent=cfg?((cfg.short||cfg.name).slice(0,5)):String(i+1);
+d.title=cfg?cfg.name:"";
 this.el.slots.appendChild(d);
 }
+this.slotCount=count;
 this.slotsDirty=true;
 }
 progShow(label,f){
@@ -285,7 +297,7 @@ drawRadar(){
 const g=this.rctx,S=176,c=S/2;
 g.clearRect(0,0,S,S);
 const p=engine.player;if(!p||!WORLD||!WORLD.def)return;
-const range=42;
+const range=26;   // metres shown edge-to-centre
 const sc=c/range;
 g.save();
 g.beginPath();g.arc(c,c,c-2,0,7);g.clip();
@@ -407,11 +419,15 @@ this.el.practicechip.textContent="PRACTICE \u00B7 "+bits.join(" ");
 }
 }
 this.el.wname.textContent=cfg.name;
+// The loadout can grow mid-round with "carry everything", so track the count.
+if(this.slotCount!==p.slots.length)this.refreshSlots(p);
 if(this.slotsDirty){
 this.slotsDirty=false;
 [...this.el.slots.children].forEach((d,i)=>{
-d.classList.toggle("on",i===p.curSlot);
-d.classList.toggle("dry",p.slots[i].mag<=0&&p.slots[i].reserve<=0);
+const sl=p.slots[i];
+d.classList.toggle("on",i===p.curSlot&&!p.nadeMode);
+d.classList.toggle("dry",!!(sl&&sl.cfg&&sl.mag<=0&&sl.reserve<=0));
+d.classList.toggle("empty",!(sl&&sl.cfg));
 });
 }
 this.el.timerchip.textContent=U.fmt(MATCH.timeLeft);

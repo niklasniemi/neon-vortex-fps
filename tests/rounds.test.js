@@ -76,7 +76,7 @@ export function run(){
   }
 
   // --- fuse and defuse timings --------------------------------------------
-  check("bomb: 40 second fuse", md.bombTime===40, `${md.bombTime}s`);
+  check("bomb: fuse is long enough to contest", md.bombTime>=45, `${md.bombTime}s`);
   check("bomb: plant takes about 3 seconds", md.plantTime>2.5&&md.plantTime<4,
     `${md.plantTime}s`);
   check("bomb: defuse takes 5 seconds", md.defuseTime===5, `${md.defuseTime}s`);

@@ -8,6 +8,7 @@ import {NET2} from '../net/p2p.js';
 import {Cheats} from '../game/cheats.js';
 import {Combatant} from './combatant.js';
 import {buildCharMesh} from './charmesh.js';
+import {buildGrenadeVM} from '../render/viewmodels.js';
 
 export class Player extends Combatant{
 constructor(name){
@@ -33,6 +34,7 @@ this.makeHitMeshes();
 }
 onSpawned(){
 this.specTarget=null;this.specYaw=undefined;
+this.nadeMode=false;
 if(UI)UI.specBar(null,0);
 this.pitch=0;this.recoil.p=this.recoil.y=this.recoil.vp=this.recoil.vy=0;
 this.chargeT=-1;this.killerRef=null;
@@ -42,6 +44,78 @@ const vm=this.getVM(this.currentCfg().id);
 if(vm)vm.visible=true;
 this.switchAnim=0;this.pendingSlot=-1;
 }
+/** Lazily builds the held-grenade model for a type. */
+getNadeVM(type){
+if(!this.nadeVMs)this.nadeVMs={};
+if(!this.nadeVMs[type]){
+const g=buildGrenadeVM(NADE_DEFS[type].color,type);
+g.traverse(o=>{o.castShadow=false;o.receiveShadow=false;
+  if(o.material){o.material=o.material.clone();o.material.depthTest=true}});
+g.visible=false;
+this.vmRoot.add(g);
+this.nadeVMs[type]=g;
+}
+return this.nadeVMs[type];
+}
+
+/** Shows exactly one held item: a grenade, or the current gun. */
+refreshHeld(){
+for(const id in this.vms)this.vms[id].visible=false;
+if(this.nadeVMs)for(const k in this.nadeVMs)this.nadeVMs[k].visible=false;
+if(this.nadeMode){
+const t=this.currentNade();
+if(t){this.getNadeVM(t).visible=true;return}
+}
+const vm=this.getVM(this.currentCfg().id);
+if(vm)vm.visible=true;
+}
+
+/** Grenade types currently carried, in a stable order. */
+ownedNades(){return NADE_ORDER.filter(t=>this.nades[t]>0)}
+
+/** The grenade the player is holding, or null. */
+currentNade(){
+const owned=this.ownedNades();
+if(!owned.length)return null;
+const t=NADE_ORDER[this.nadeSel%NADE_ORDER.length];
+return this.nades[t]>0?t:owned[0];
+}
+
+/** @returns {boolean} whether grenade mode could be entered */
+enterNadeMode(){
+const owned=this.ownedNades();
+if(!owned.length)return false;
+if(this.nades[NADE_ORDER[this.nadeSel%NADE_ORDER.length]]<=0)
+this.nadeSel=NADE_ORDER.indexOf(owned[0]);
+this.nadeMode=true;
+this.pendingSlot=-1;
+this.refreshHeld();
+UI.nadeBar(this);
+UI.toast("GRENADES \u2014 WHEEL SELECT \u00B7 LMB THROW \u00B7 RMB ROLL \u00B7 G BACK");
+AUDIO.play("reload1",{vol:.4});
+return true;
+}
+
+exitNadeMode(){
+this.nadeMode=false;
+this.refreshHeld();
+UI.nadeBar(this);
+UI.slotsDirty=true;
+}
+
+/** Steps to the next/previous grenade actually carried. */
+cycleNade(dir){
+const owned=this.ownedNades();
+if(!owned.length)return;
+const cur=this.currentNade();
+const i=owned.indexOf(cur);
+const next=owned[((i<0?0:i+dir)%owned.length+owned.length)%owned.length];
+this.nadeSel=NADE_ORDER.indexOf(next);
+this.refreshHeld();
+UI.nadeBar(this);
+AUDIO.play("ui_click",{ui:true,vol:.5});
+}
+
 /** Rebuilds the slot layout for the assigned team (CT gets the USP, T the Glock). */
 applyTeamLoadout(primary){
   this.buildSlots(standardLoadout(this.team||1,primary||null));
@@ -116,7 +190,11 @@ this.ctrl.jumpConsume=true;
 if(INPUT.press("Space")){this.ctrl.jump=true;}
 else this.ctrl.jump=false;
 const m=INPUT.consumeMouse();
-const sens=.0011*SETTINGS.sens*U.lerp(1,SETTINGS.adsSens,this.adsAmt);
+// Scoped weapons get their own ADS multiplier on top of the user setting --
+// a magnified optic should feel far heavier than iron sights.
+const wcfg=this.currentCfg();
+const wMult=(wcfg&&wcfg.adsSens!==undefined)?wcfg.adsSens:1;
+const sens=.0011*SETTINGS.sens*U.lerp(1,SETTINGS.adsSens*wMult,this.adsAmt);
 this.yaw-=m.dx*sens;
 this.pitch-=m.dy*sens*(SETTINGS.invert?-1:1);
 this.pitch=U.clamp(this.pitch,-1.55,1.55);
@@ -127,25 +205,36 @@ if(this.nadeCd>0)this.nadeCd-=dt;
 const canBuy=MATCH.canBuy(this);
 if(INPUT.press("KeyB")&&canBuy)UI.toggleBuy();
 if(this.alive&&MATCH.mode.roundBased){
+// G is a mode toggle, not a cycler. It used to advance one grenade type per
+// press and drop you back to your gun after every throw, so selecting the one
+// you wanted meant mashing it. Now: G holds your utility, the wheel picks
+// between what you actually carry, and G puts the gun back.
 if(INPUT.press("KeyG")){
-let found=false;
-for(let k=0;k<4&&!found;k++){
-this.nadeSel=(this.nadeSel+1)%NADE_ORDER.length;
-const t=NADE_ORDER[this.nadeSel];
-if(this.nades[t]>0){this.nadeMode=true;found=true;UI.toast("THROWING: "+NADE_DEFS[t].name+" \u2014 LMB THROW \u00B7 RMB ROLL")}
-}
-if(!found){this.nadeMode=false;UI.toast("NO GRENADES \u2014 BUY WITH B DURING FREEZE")}
-UI.nadeBar(this);
+if(this.nadeMode)this.exitNadeMode();
+else if(!this.enterNadeMode())UI.toast("NO GRENADES \u2014 BUY WITH B");
 }
 if(this.nadeMode&&!(UI&&UI.buyOpen)){
-const t=NADE_ORDER[this.nadeSel%NADE_ORDER.length];
-if(this.nades[t]<=0){this.nadeMode=false;UI.nadeBar(this)}
-else if(INPUT.btn[0]&&this.nadeCd<=0){
-WPN.throwNade(this,t,WPN.aimDir(this,new THREE.Vector3()),16);
-this.nadeMode=false;UI.nadeBar(this);
-}else if(INPUT.btn[2]&&this.nadeCd<=0){
-WPN.throwNade(this,t,WPN.aimDir(this,new THREE.Vector3()),7.5);
-this.nadeMode=false;UI.nadeBar(this);
+if(!this.ownedNades().length){this.exitNadeMode()}
+else{
+const t=this.currentNade();
+// Wheel walks the utility you are carrying.
+const nw=INPUT.takeWheel();
+if(nw)this.cycleNade(nw>0?1:-1);
+// Switching to a gun by number leaves grenade mode.
+for(let i=0;i<this.slots.length;i++){
+if(INPUT.press("Digit"+(i+1))){this.exitNadeMode();this.requestSwitch(i);break}
+}
+if(this.nadeMode&&t&&this.nadeCd<=0&&(INPUT.btn[0]||INPUT.btn[2])){
+const power=INPUT.btn[2]?7.5:16;
+WPN.throwNade(this,t,WPN.aimDir(this,new THREE.Vector3()),power);
+// Stay in grenade mode -- step to the next type you still hold, or drop
+// back to the gun once the pouch is empty.
+if(this.nades[t]<=0){
+if(this.ownedNades().length)this.cycleNade(1);
+else this.exitNadeMode();
+}
+UI.nadeBar(this);
+}
 }
 }
 }
